@@ -140,30 +140,30 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+#+BEGIN_SRC R :results output graphics :file plot_v_exp.png :exports results 
    plot(fit.v.exp)
 #+END_SRC
 
 #+RESULTS:
-[[file:plot_v.png]]
+[[file:plot_v_exp.png]]
 
 #+CAPTION: v: exponentional
 
-#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+#+BEGIN_SRC R :results output graphics :file plot_v_puissance.png :exports results 
    plot(fit.v.puissance)
 #+END_SRC
 
 #+RESULTS:
-[[file:plot_v.png]]
+[[file:plot_v_puissance.png]]
 
 #+CAPTION: v: puissance
 
-#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+#+BEGIN_SRC R :results output graphics :file plot_v_linear.png :exports results 
    plot(fit.v.linear)
 #+END_SRC
 
 #+RESULTS:
-[[file:plot_v.png]]
+[[file:plot_v_linear.png]]
 
 #+CAPTION: v: linear
 
@@ -211,7 +211,7 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 
 
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R  :results output  :exports both
   loo.v.exp <-  loo(fit.v.exp, moment_match = TRUE)
   loo.v.puissance <-  loo(fit.v.puissance, moment_match = TRUE)
   loo.v.linear <-  loo(fit.v.linear, moment_match = TRUE)
@@ -234,11 +234,11 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       prior = prior,
 	       family = Gamma(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_exp'
+	       file = 'a_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
@@ -246,11 +246,11 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       prior = prior,
 	       family = Gamma(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_puissance'
+	       file = 'a_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'a'),
@@ -260,16 +260,57 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_linear.stan', 
-	       save_pars = save_pars(all = TRUE),
-               file = 'a_linear'
+	       file = 'a_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code 
+#+BEGIN_SRC R :results output graphics :file plot_a_exp.png :exports results 
+   plot(fit.a.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_exp.png]]
+
+#+CAPTION: a: exponentional
+
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+#+CAPTION: a: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_a_puissance.png :exports results 
+   plot(fit.a.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_puissance.png]]
+
+#+CAPTION: a: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_a_linear.png :exports results 
+   plot(fit.a.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_linear.png]]
+
+#+CAPTION: a: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
+  loo.a.exp <-  loo(fit.a.exp, moment_match = TRUE)
   loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
   loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
   loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
+  loo.a
 #+END_SRC
+
+#+RESULTS:
+:                 elpd_diff se_diff
+: fit.a.puissance  0.0       0.0   
+: fit.a.exp       -0.6       0.9   
+: fit.a.linear    -9.5       3.7
 
 #+BEGIN_SRC R :results output graphics :file pp_a.png :exports results 
   a.exp <- pp_check(fit.a.exp, nsamples = 100)
@@ -279,6 +320,7 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   print(pp_a)
 #+END_SRC
 
+#+RESULTS:
 [[file:pp_a.png]]
 
 
@@ -307,6 +349,9 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
     geom_point(data= dd, mapping = aes(x = age, y = param))
   print(p)
 #+END_SRC
+
+#+RESULTS:
+[[file:predict_a.png]]
 
 ** Residual Time
 
