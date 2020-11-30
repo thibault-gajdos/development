@@ -1,0 +1,807 @@
+#+title: Simon 1
+#+date: 
+#+author: 
+#+email: thibault.gajdos@univ-amu.fr
+#+PANDOC_OPTIONS: self-contained:t toc:t
+# clean output
+#+begin_src emacs-lisp :results none :exports none
+  ;; (org-babel-map-src-blocks nil (org-babel-remove-result))
+  ;; (setq org-babel-min-lines-for-block-output 1000)
+#+end_src
+
+:options_LaTex:
+#+options: title:t date:t
+#+LATEX_HEADER: \RequirePackage[utf8]{inputenc}
+#+LATEX_HEADER: \graphicspath{{figures/}}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \hypersetup{
+#+LATEX_HEADER:     colorlinks,%
+#+LATEX_HEADER:     citecolor=black,%
+#+LATEX_HEADER:     filecolor=black,%
+#+LATEX_HEADER:     linkcolor=blue,%
+#+LATEX_HEADER:     urlcolor=black
+#+LATEX_HEADER: }
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \usepackage[french]{babel}
+#+LATEX_HEADER: \usepackage[style = apa]{biblatex}
+#+LATEX_HEADER: \DeclareLanguageMapping{english}{english-apa}
+#+LATEX_HEADER: \newcommand\poscite[1]{\citeauthor{#1}'s (\citeyear{#1})}
+#+LATEX_HEADER: \addbibresource{~/thib/papiers/thib.bib}
+#+LATEX_HEADER: \usepackage[top=2cm,bottom=2.2cm,left=3cm,right=3cm]{geometry}
+:END:
+
+
+:Options_R:
+#+property: header-args:R+  :tangle yes
+#+property: header-args:R+ :session *R*
+:end:
+
+
+
+
+# ######################################################################
+#                END PREAMBLE
+# ######################################################################
+
+#+BEGIN_SRC R  :results silent :exports none
+  rm(list=ls(all=TRUE))  ## efface les données
+  source('~/thib/projects/tools/R_lib.r')
+  setwd('~/thib/projects/developpement/trimmed/simon1')
+
+  data <- read_csv('3MAD_ALL_dataset1_simon.csv')
+
+  data <- data %>%
+    pivot_longer(cols = c(v:ster,meanRT_comp,meanRT_incomp) , names_to = "type", values_to = "param") %>%
+    mutate(n = 1:n()) %>%
+    rename(age = Age_real)
+
+  save(data, file = 'data_dev.dta')
+  d.param <- data %>%
+    pivot_wider(names_from = type, values_from = param, id_cols = n)
+#+END_SRC
+
+
+* Raw data
+
+Let's first have a look on the distribution of DMC parameters vs. age. 
+
+#+BEGIN_SRC R  :results output graphics :file parameters_vs_age.png :exports results 
+  param_age <- ggplot(data = data, aes(x = age, y = param)) +
+    geom_point() +
+    facet_wrap( ~ type , scales = 'free')
+  print(param_age)
+#+END_SRC
+
+#+RESULTS:
+[[file:parameters_vs_age.png]]
+
+And the distribution of the parameters.
+
+#+BEGIN_SRC R  :results output graphics :file parameters.png :exports results 
+  glimpse(data) 
+  param_raw <- ggplot(data = data, aes(x = param)) +
+    geom_histogram()+
+    facet_wrap( ~ type , scales = 'free')
+  print(param_raw)
+#+END_SRC
+
+#+RESULTS:
+[[file:parameters.png]]
+
+* Fits by parameter
+
+** Priors
+
+We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and gamma. 
+
+#+BEGIN_SRC R  :results output silent :exports code 
+  prior <-  prior(normal(0, 1), nlpar = "b1", class = 'b') +
+  prior(normal(0, 1), nlpar = "b2", class = 'b', lb = 0) +
+  prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)
+#+END_SRC
+
+** drift
+
+#+BEGIN_SRC R  :results output silent  :exports code
+  fit.v.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'v'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,
+	       save_model = 'v_exp.stan',
+	       file = 'v_exp',
+	       save_pars = save_pars(all = TRUE)
+	       )
+  fit.v.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'v'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'v_puissance.stan',
+	       file = 'v_puisssance',
+	       save_pars = save_pars(all = TRUE)
+	       )
+  fit.v.linear <- brm(param ~  age,
+	       data = data %>% filter(type == 'v'),
+	       prior = c(set_prior("normal(0,1)",  class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'v_linear.stan', 
+	       file = 'v_linear',
+	       save_pars = save_pars(all = TRUE)
+	       )
+#+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v.png]]
+
+#+CAPTION: v: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v.png]]
+
+#+CAPTION: v: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v.png]]
+
+#+CAPTION: v: linear
+
+#+BEGIN_SRC R :results output graphics :file pp_v.png :exports results 
+  v.exp <- pp_check(fit.v.exp, nsamples = 100)
+  v.puissance <- pp_check(fit.v.puissance, nsamples = 100)
+  v.linear <- pp_check(fit.v.linear, nsamples = 100)
+  pp_v <- ggarrange(v.exp, v.puissance, v.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_v)
+#+END_SRC
+
+#+RESULTS:
+[[file:pp_v.png]]
+
+
+
+
+#+BEGIN_SRC R :results output graphics :file predict_v.png :exports results 
+  exp <-  conditional_effects(fit.v.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.v.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.v.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'v') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param))
+  print(p)
+#+END_SRC
+
+#+RESULTS:
+[[file:predict_v.png]]
+
+
+
+#+BEGIN_SRC R  :results output  :exports code
+  loo.v.exp <-  loo(fit.v.exp, moment_match = TRUE)
+  loo.v.puissance <-  loo(fit.v.puissance, moment_match = TRUE)
+  loo.v.linear <-  loo(fit.v.linear, moment_match = TRUE)
+  loo.v <- loo_compare(loo.v.exp, loo.v.puissance, loo.v.linear)
+  loo.v
+#+END_SRC
+
+#+RESULTS:
+:                 elpd_diff se_diff
+: fit.v.exp         0.0       0.0  
+: fit.v.puissance  -0.7       1.3  
+: fit.v.linear    -11.1       4.0
+
+** boundary
+
+#+BEGIN_SRC R  :results output silent  :exports code 
+  fit.a.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'a'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'a_exp.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'a_exp'
+	       )
+  fit.a.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'a'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'a_puissance.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'a_puissance'
+	       )
+  fit.a.linear <- brm(param ~  age,
+	       data = data %>% filter(type == 'a'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'a_linear.stan', 
+	       save_pars = save_pars(all = TRUE),
+               file = 'a_linear'
+	       )
+#+END_SRC
+
+#+BEGIN_SRC R  :results output  :exports code 
+  loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
+  loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
+  loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
+  #loo.a
+  #BF_informative <- bayes_factor(fit.a.exp,fit.a.puissance)
+  #BF_informative
+#+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file pp_a.png :exports results 
+  a.exp <- pp_check(fit.a.exp, nsamples = 100)
+  a.puissance <- pp_check(fit.a.puissance, nsamples = 100)
+  a.linear <- pp_check(fit.a.linear, nsamples = 100)
+  pp_a <- ggarrange(a.exp, a.puissance, a.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_a)
+#+END_SRC
+
+[[file:pp_a.png]]
+
+
+
+#+BEGIN_SRC R :results output graphics :file predict_a.png :exports results 
+  exp <-  conditional_effects(fit.a.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.a.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.a.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'a') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param))
+  print(p)
+#+END_SRC
+
+** Residual Time
+
+#+BEGIN_SRC R  :results output silent  :exports code :
+  fit.ter.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'ter'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'ter_exp.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'ter_exp'
+	       )
+  fit.ter.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'ter'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'ter_puissance.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'ter_puissance'
+	       )
+  fit.ter.linear <- brm(param ~  age,
+	       data = data %>% filter(type == 'ter'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'ter_linear.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'ter_linear'
+	       )
+#+END_SRC
+
+
+#+BEGIN_SRC R  :results output  :exports code 
+  loo.ter.exp <-  loo(fit.ter.exp, moment_match = TRUE)
+  loo.ter.puissance <-  loo(fit.ter.puissance, moment_match = TRUE)
+  loo.ter.linear <-  loo(fit.ter.linear, moment_match = TRUE)
+  loo.ter <- loo_compare(loo.ter.exp, loo.ter.puissance, loo.ter.linear)
+#+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file pp_ter.png :exports results 
+  ter.exp <- pp_check(fit.ter.exp, nsamples = 100)
+  ter.puissance <- pp_check(fit.ter.puissance, nsamples = 100)
+  ter.linear <- pp_check(fit.ter.linear, nsamples = 100)
+  pp_ter <- ggarrange(ter.exp,ter.puissance,ter.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_ter)
+#+END_SRC
+
+[[file:pp_ter.png]]
+
+#+BEGIN_SRC R :results output graphics :file predict_ter.png :exports results 
+  exp <-  conditional_effects(fit.ter.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.ter.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.ter.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'ter') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param))
+  print(p)
+#+END_SRC
+
+** tau
+
+#+BEGIN_SRC R  :results output silent  :exports code 
+  fit.tau.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'tau'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .99,  max_treedepth = 16),
+	       iter = 8000,  warmup = 5000, seed = 123,  
+	       save_model = 'tau_exp.stan',
+	       save_pars = save_pars(all = TRUE),
+	       file = 'tau_exp'
+	       )
+   pp_check(fit.tau.exp)
+  fit.tau.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'tau'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'tau_puissance.stan',
+	       save_pars = save_pars(all = TRUE),
+	       file = 'tau_puissance'
+	       )
+  fit.tau.linear <- brm(param ~  age,
+	       data = data %>% filter(type == 'tau'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'tau_linear.stan',
+	       save_pars = save_pars(all = TRUE),
+	       file = 'tau_linear'
+	       )
+#+END_SRC
+
+ 
+#+BEGIN_SRC R  :results output  :exports both
+  loo.tau.exp <-  loo(fit.tau.exp, moment_match = TRUE, reloo = TRUE)
+  loo.tau.puissance <-  loo(fit.tau.puissance, moment_match = TRUE)
+  loo.tau.linear <-  loo(fit.tau.linear, moment_match = TRUE)
+  loo.tau <- loo_compare(loo.tau.exp, loo.tau.puissance, loo.tau.linear)
+#+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file pp_tau.png :exports results 
+  tau.exp <- pp_check(fit.tau.exp, nsamples = 100)
+  tau.puissance <- pp_check(fit.tau.puissance, nsamples = 100)
+  tau.linear <- pp_check(fit.tau.linear, nsamples = 100)
+  pp_tau <- ggarrange(tau.exp, tau.puissance, tau.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_tau)
+#+END_SRC
+
+[[file:pp_tau.png]]
+
+
+#+BEGIN_SRC R :results output graphics :file predict_tau.png :exports results 
+  exp <-  conditional_effects(fit.tau.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.tau.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.tau.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'tau') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param))
+  print(p)
+#+END_SRC
+
+** max amplitude
+
+#+BEGIN_SRC R  :results output silent  :exports code 
+   prior1 <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+
+  fit.max_ampl.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'max_ampl'),
+	       prior = prior1,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .9999,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'max_ampl_exp.stan',
+	       #file = 'max_ampl_exp',
+	       save_pars = save_pars(all = TRUE)
+	       )
+  fit.max_ampl.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'max_ampl'),
+	       prior = prior1,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'max_ampl_puissance.stan',
+	       file = 'max_ampl_puissance',
+	       save_pars = save_pars(all = TRUE)
+	       )
+  fit.max_ampl.linear <- brm(param ~  age,
+	       data = data %>% filter(type == 'max_ampl'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'max_ampl_linear.stan',
+	       save_pars = save_pars(all = TRUE),
+	       file = 'max_ampl_linear'
+	       )
+#+END_SRC
+
+
+#+BEGIN_SRC R  :results output  :exports both 
+  loo.max_ampl.exp <-  loo(fit.max_ampl.exp, moment_match = TRUE)
+  loo.max_ampl.puissance <-  loo(fit.max_ampl.puissance, moment_match = TRUE)
+  loo.max_ampl.linear <-  loo(fit.max_ampl.linear, moment_match = TRUE)
+  loo.max_ampl <- loo_compare(loo.max_ampl.exp, loo.max_ampl.puissance, loo.max_ampl.linear)
+
+#+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file pp_max_ampl.png :exports results 
+  max_ampl.exp <- pp_check(fit.max_ampl.exp, nsamples = 100)
+  max_ampl.puissance <- pp_check(fit.max_ampl.puissance, nsamples = 100)
+  max_ampl.linear <- pp_check(fit.max_ampl.linear, nsamples = 100)
+  pp_max_ampl <- ggarrange(max_ampl.exp, max_ampl.puissance, max_ampl.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_max_ampl)
+#+END_SRC
+
+[[file:pp_max_ampl.png]]
+
+
+#+BEGIN_SRC R :results output graphics :file predict_max_ampl.png :exports results 
+  exp <-  conditional_effects(fit.max_ampl.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.max_ampl.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.max_ampl.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'max_ampl') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param))
+  print(p)
+#+END_SRC
+
+** RT comp
+
+#+BEGIN_SRC R  :results output silent  :exports code
+  fit.meanRT_comp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'meanRT_comp'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_comp_exp.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'meanRT_comp_exp'
+	       )
+  fit.meanRT_comp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'meanRT_comp'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_comp_puissance.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'meanRT_comp_puissance'
+	       )
+  fit.meanRT_comp.linear <- brm(param/1000 ~  age,
+	       data = data %>% filter(type == 'meanRT_comp'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_comp_linear.stan',
+	       save_pars = save_pars(all = TRUE),
+               file = 'meanRT_comp_linear'
+	       )
+#+END_SRC
+
+#+BEGIN_SRC R  :results output  :exports code
+  loo.meanRT_comp.exp <-  loo(fit.meanRT_comp.exp, moment_match = TRUE)
+  loo.meanRT_comp.puissance <-  loo(fit.meanRT_comp.puissance, moment_match = TRUE)
+  loo.meanRT_comp.linear <-  loo(fit.meanRT_comp.linear, moment_match = TRUE)
+  loo.meanRT_comp <- loo_compare(loo.meanRT_comp.exp, loo.meanRT_comp.puissance, loo.meanRT_comp.linear)
+#+END_SRC
+
+
+#+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
+  meanRT_comp.exp <- pp_check(fit.meanRT_comp.exp, nsamples = 100)
+  meanRT_comp.puissance <- pp_check(fit.meanRT_comp.puissance, nsamples = 100)
+  meanRT_comp.linear <- pp_check(fit.meanRT_comp.linear, nsamples = 100)
+  pp_meanRT_comp <- ggarrange(meanRT_comp.exp, meanRT_comp.puissance, meanRT_comp.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_meanRT_comp)
+#+END_SRC
+
+[[file:pp_meanRT_incomp.png]]
+
+
+
+#+BEGIN_SRC R :results output graphics :file predict_meanRT_comp.png :exports results 
+  exp <-  conditional_effects(fit.meanRT_comp.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.meanRT_comp.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.meanRT_comp.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'meanRT_comp') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param/1000))
+  print(p)
+#+END_SRC
+
+** RT incomp
+
+#+BEGIN_SRC R  :results output silent  :exports code 
+  fit.meanRT_incomp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'meanRT_incomp'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_incomp_exp.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'meanRT_incomp_exp'
+	       )
+  fit.meanRT_incomp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
+		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+	       data = data %>% filter(type == 'meanRT_incomp'),
+	       prior = prior,
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_incomp_puissance.stan',
+               save_pars = save_pars(all = TRUE),
+               file = 'meanRT_incomp_puissance'
+	       )
+  fit.meanRT_incomp.linear <- brm(param/1000 ~  age,
+	       data = data %>% filter(type == 'meanRT_incomp'),
+	       prior = c(set_prior("normal(0,1)", class = "b")),
+	       family = Gamma(link = 'identity'),
+	       cores = 4, chains = 4,
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
+	       save_model = 'meanRT_incomp_linear.stan',
+	       save_pars = save_pars(all = TRUE),
+               file = 'meanRT_incomp_linear'
+	       )
+#+END_SRC
+
+#+BEGIN_SRC R  :results output  :exports code 
+  loo.meanRT_incomp.exp <-  loo(fit.meanRT_incomp.exp, moment_match = TRUE)
+  loo.meanRT_incomp.puissance <-  loo(fit.meanRT_incomp.puissance, moment_match = TRUE)
+  loo.meanRT_incomp.linear <-  loo(fit.meanRT_incomp.linear, moment_match = TRUE)
+  loo.meanRT_incomp <- loo_compare(loo.meanRT_incomp.exp, loo.meanRT_incomp.puissance, loo.meanRT_incomp.linear)
+#+END_SRC
+
+
+#+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
+  meanRT_incomp.exp <- pp_check(fit.meanRT_incomp.exp, nsamples = 100)
+  meanRT_incomp.puissance <- pp_check(fit.meanRT_incomp.puissance, nsamples = 100)
+  meanRT_incomp.linear <- pp_check(fit.meanRT_incomp.linear, nsamples = 100)
+  pp_meanRT_incomp <- ggarrange(meanRT_incomp.exp, meanRT_incomp.puissance, meanRT_incomp.linear, ncol = 1,  labels = c('exp', 'power', 'linear'))
+  print(pp_meanRT_incomp)
+#+END_SRC
+
+[[file:pp_meanRT_incomp.png]]
+
+
+
+#+BEGIN_SRC R :results output graphics :file predict_meanRT_incomp.png :exports results 
+  exp <-  conditional_effects(fit.meanRT_incomp.exp)$age %>%
+				       rename(e = estimate__,  u = upper__, l = lower__) %>%
+				       select(age, e, u, l) %>%
+				       mutate(model = 'exp')
+  power <- conditional_effects(fit.meanRT_incomp.puissance)$age %>%
+					      rename(e = estimate__, u = upper__, l = lower__) %>%
+					      select(age, e,  u, l) %>%
+					      mutate(model = 'power')
+  linear <- conditional_effects(fit.meanRT_incomp.linear)$age %>%
+					    rename(e = estimate__,  u = upper__, l = lower__) %>%
+					    select(age, e,  u, l) %>%
+					    mutate(model = 'linear')
+  d <- rbind(exp, power)
+  d <- rbind(d, linear)
+
+  dd <- data %>% filter(type == 'meanRT_incomp') %>% select(age,param) %>% mutate(model = 'data')
+
+  p <- ggplot(data = d, aes(x = age, y = e, group = model), colour = group) +
+    geom_line(aes(colour = model)) +
+    geom_ribbon(aes(ymin=l, ymax=u, fill = model), alpha = .2) +
+    geom_point(data= dd, mapping = aes(x = age, y = param/1000))
+  print(p)
+#+END_SRC
+
+* Summary
+
+** Models
+
+There are two groups of parameters:
+- v, ter, RTcomp, RTincomp : power and exp models are equivalent, and dominate linear model
+- a, tau, max_ampl : all models are equivalent... 
+
+
+#+BEGIN_SRC R  :results output  :exports both
+  loo.v
+  loo.a
+  loo.ter
+  loo.tau
+  loo.max_ampl
+  loo.meanRT_comp
+  loo.meanRT_incomp
+#+END_SRC
+
+** a, tau, max_ampl
+
+Because all models are roughly equivalent, we analyse the simplest one (ie, linear). We observe that the models are really not good. 
+
+
+#+BEGIN_SRC R  :results output  :exports both
+  fixef(fit.a.linear)
+#+END_SRC
+
+:              Estimate    Est.Error         Q2.5         Q97.5
+: Intercept  0.08281029 0.0034643369  0.076090827  0.0896605958
+: age       -0.00127973 0.0002008196 -0.001654081 -0.0008639675
+
+
+#+BEGIN_SRC R  :results output  :exports both
+  fixef(fit.tau.linear)
+#+END_SRC
+
+:               Estimate    Est.Error         Q2.5        Q97.5
+: Intercept  0.147799942 0.0183910957  0.112579933  0.185145759
+: age       -0.002520769 0.0009922689 -0.004180671 -0.000277288
+
+
+#+BEGIN_SRC R  :results output  :exports both 
+  fixef(fit.max_ampl.linear)
+#+END_SRC
+
+:                Estimate    Est.Error          Q2.5        Q97.5
+: Intercept  0.0256772069 0.0022249525  0.0212890302 2.997045e-02
+: age       -0.0002986053 0.0001419562 -0.0005459726 1.042404e-05
+
+
+
+** V, ter, TR_comp, TR_incomp
+
+#+BEGIN_SRC R  :results output  :exports results 
+  results <- data.frame(Parameter = character(), Estimate = numeric(), Est.Error = numeric(),  Q2.5 = numeric(), Q97.5 = numeric())
+  for (x in c('v','ter','meanRT_comp','meanRT_incomp'))
+  {
+  fit.x <- eval(as.name(paste('fit.', x,'.exp',sep = '')))  
+  row <-  c(Parameter = x, round(fixef(fit.x)[2,], digits = 2), R2 = round(bayes_R2(fit.x)[1], digits = 3))
+  row <- as.data.frame(t(row))
+  results <- rbind(results, row)
+  }
+  print(results)
+#+END_SRC
+
+
