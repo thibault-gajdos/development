@@ -269,9 +269,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
   loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
   loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
-  #loo.a
-  #BF_informative <- bayes_factor(fit.a.exp,fit.a.puissance)
-  #BF_informative
 #+END_SRC
 
 #+BEGIN_SRC R :results output graphics :file pp_a.png :exports results 
