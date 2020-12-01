@@ -17,7 +17,7 @@ data {
 transformed data {
 }
 parameters {
-  vector[K_b1] b_b1;  // population-level effects
+  vector<lower=0>[K_b1] b_b1;  // population-level effects
   vector<lower=0>[K_b2] b_b2;  // population-level effects
   vector<lower=0>[K_b3] b_b3;  // population-level effects
   real<lower=0> shape;  // shape parameter
@@ -42,7 +42,8 @@ model {
     target += gamma_lpdf(Y | shape, mu);
   }
   // priors including all constants
-  target += normal_lpdf(b_b1 | 0, 1);
+  target += normal_lpdf(b_b1 | 0, 1)
+    - 1 * normal_lccdf(0 | 0, 1);
   target += normal_lpdf(b_b2 | 0, 1)
     - 1 * normal_lccdf(0 | 0, 1);
   target += normal_lpdf(b_b3 | 0, 1)

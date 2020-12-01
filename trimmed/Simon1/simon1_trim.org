@@ -355,7 +355,7 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** Residual Time
 
-#+BEGIN_SRC R  :results output silent  :exports code :
+#+BEGIN_SRC R  :results output silent  :exports code 
   fit.ter.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'ter'),
@@ -365,8 +365,8 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_exp'
+	       file = 'ter_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
@@ -377,8 +377,8 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_puissance'
+	       file = 'ter_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'ter'),
@@ -388,18 +388,57 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_linear.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_linear'
+	       file = 'ter_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_ter_exp.png :exports results 
+   plot(fit.ter.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code 
+#+RESULTS:
+[[file:plot_ter_exp.png]]
+
+#+CAPTION: ter: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_puissance.png :exports results 
+   plot(fit.ter.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_puissance.png]]
+
+#+CAPTION: ter: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_linear.png :exports results 
+   plot(fit.ter.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_linear.png]]
+
+#+CAPTION: ter: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.ter.exp <-  loo(fit.ter.exp, moment_match = TRUE)
   loo.ter.puissance <-  loo(fit.ter.puissance, moment_match = TRUE)
   loo.ter.linear <-  loo(fit.ter.linear, moment_match = TRUE)
   loo.ter <- loo_compare(loo.ter.exp, loo.ter.puissance, loo.ter.linear)
+  loo.ter
 #+END_SRC
+
+#+RESULTS:
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                   elpd_diff se_diff
+: fit.ter.puissance   0.0       0.0  
+: fit.ter.exp        -0.8       0.9  
+: fit.ter.linear    -21.8       8.6
 
 #+BEGIN_SRC R :results output graphics :file pp_ter.png :exports results 
   ter.exp <- pp_check(fit.ter.exp, nsamples = 100)
@@ -409,7 +448,9 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   print(pp_ter)
 #+END_SRC
 
+#+RESULTS:
 [[file:pp_ter.png]]
+
 
 #+BEGIN_SRC R :results output graphics :file predict_ter.png :exports results 
   exp <-  conditional_effects(fit.ter.exp)$age %>%
@@ -436,46 +477,79 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   print(p)
 #+END_SRC
 
+#+RESULTS:
+[[file:predict_ter.png]]
+
 ** tau
 
 #+BEGIN_SRC R  :results output silent  :exports code 
+   prior.tau <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+
   fit.tau.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
-	       prior = prior,
+	       prior = prior.tau,
 	       family = Gamma(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .99,  max_treedepth = 16),
-	       iter = 8000,  warmup = 5000, seed = 123,  
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_exp.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_exp'
+	       file = 'tau_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
-   pp_check(fit.tau.exp)
   fit.tau.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
-	       prior = prior,
+	       prior = prior.tau,
 	       family = Gamma(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_puissance.stan',
+	       file = 'tau_puissance',
 	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_puissance'
 	       )
   fit.tau.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'tau'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
 	       family = Gamma(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_linear'
+	       file = 'tau_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_exp.png :exports results 
+   plot(fit.tau.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_exp.png]]
+
+#+CAPTION: tau: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_puissance.png :exports results 
+   plot(fit.tau.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_puissance.png]]
+
+#+CAPTION: tau: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_linear.png :exports results 
+   plot(fit.tau.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_linear.png]]
+
+#+CAPTION: tau: linear
 
  
 #+BEGIN_SRC R  :results output  :exports both
@@ -483,7 +557,17 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   loo.tau.puissance <-  loo(fit.tau.puissance, moment_match = TRUE)
   loo.tau.linear <-  loo(fit.tau.linear, moment_match = TRUE)
   loo.tau <- loo_compare(loo.tau.exp, loo.tau.puissance, loo.tau.linear)
+  loo.tau
 #+END_SRC
+
+#+RESULTS:
+: No problematic observations found. Returning the original 'loo' object.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                   elpd_diff se_diff
+: fit.tau.exp        0.0       0.0   
+: fit.tau.puissance -0.5       1.9   
+: fit.tau.linear    -3.0       4.3
 
 #+BEGIN_SRC R :results output graphics :file pp_tau.png :exports results 
   tau.exp <- pp_check(fit.tau.exp, nsamples = 100)
@@ -493,6 +577,7 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   print(pp_tau)
 #+END_SRC
 
+#+RESULTS:
 [[file:pp_tau.png]]
 
 
@@ -520,6 +605,9 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
     geom_point(data= dd, mapping = aes(x = age, y = param))
   print(p)
 #+END_SRC
+
+#+RESULTS:
+[[file:predict_tau.png]]
 
 ** max amplitude
 
