@@ -1,0 +1,78 @@
+#+title: Summary
+#+date: 
+#+author: 
+#+email: thibault.gajdos@univ-amu.fr
+#+PANDOC_OPTIONS: self-contained:t toc:t
+# clean output
+#+begin_src emacs-lisp :results none :exports none
+;;   (org-babel-map-src-blocks nil (org-babel-remove-result))
+#+end_src
+
+:options_LaTex:
+#+options: title:t date:t
+#+LATEX_HEADER: \RequirePackage[utf8]{inputenc}
+#+LATEX_HEADER: \graphicspath{{figures/}}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \hypersetup{
+#+LATEX_HEADER:     colorlinks,%
+#+LATEX_HEADER:     citecolor=black,%
+#+LATEX_HEADER:     filecolor=black,%
+#+LATEX_HEADER:     linkcolor=blue,%
+#+LATEX_HEADER:     urlcolor=black
+#+LATEX_HEADER: }
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \usepackage[french]{babel}
+#+LATEX_HEADER: \usepackage[style = apa]{biblatex}
+#+LATEX_HEADER: \DeclareLanguageMapping{english}{english-apa}
+#+LATEX_HEADER: \newcommand\poscite[1]{\citeauthor{#1}'s (\citeyear{#1})}
+#+LATEX_HEADER: \addbibresource{~/thib/papiers/thib.bib}
+#+LATEX_HEADER: \usepackage[top=2cm,bottom=2.2cm,left=3cm,right=3cm]{geometry}
+:END:
+
+
+:Options_R:
+#+property: header-args:R+  :tangle yes
+#+property: header-args:R+ :session *R*
+:end:
+
+Simon 1
+#+RESULTS:
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.24      0.05 0.14  0.35
+: 2             a     0.23      0.08 0.11  0.42
+: 3           ter     0.15      0.03  0.1  0.22
+: 4   meanRT_comp      0.2      0.03 0.15  0.28
+: 5 meanRT_incomp     0.22      0.03 0.16  0.28
+
+Simon 2
+
+#+RESULTS:
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.12      0.03 0.07  0.18
+: 2             a     0.35      0.08 0.21  0.52
+: 3           ter      0.2      0.03 0.15  0.25
+: 4   meanRT_comp     0.29      0.03 0.22  0.36
+: 5 meanRT_incomp     0.29      0.03 0.23  0.35
+
+
+Stroop
+#+RESULTS:
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.16      0.03  0.1  0.21
+: 2             a      0.3      0.06 0.19  0.44
+: 3           ter     0.16      0.03  0.1  0.22
+: 4   meanRT_comp     0.34      0.04 0.27  0.41
+: 5 meanRT_incomp     0.34      0.04 0.26  0.44
+
+
+Flanker
+#+RESULTS:
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.14      0.02 0.09  0.18
+: 2             a     0.39      0.06 0.28  0.52
+: 3           ter     0.15      0.03  0.1   0.2
+: 4   meanRT_comp     0.31      0.03 0.26  0.37
+: 5 meanRT_incomp     0.32      0.03 0.27  0.39
+
+
+
