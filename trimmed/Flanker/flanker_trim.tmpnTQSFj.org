@@ -1,0 +1,639 @@
+# Created 2020-12-01 Tue 14:26
+#+OPTIONS: title:t date:t
+#+TITLE: Flanker
+#+PANDOC_OPTIONS: self-contained:t toc:t
+
+:options_LaTex:
+#+LATEX_HEADER: \RequirePackage[utf8]{inputenc}
+#+LATEX_HEADER: \graphicspath{{figures/}}
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \hypersetup{
+#+LATEX_HEADER: colorlinks,%
+#+LATEX_HEADER: citecolor=black,%
+#+LATEX_HEADER: filecolor=black,%
+#+LATEX_HEADER: linkcolor=blue,%
+#+LATEX_HEADER: urlcolor=black
+#+LATEX_HEADER: }
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \usepackage[french]{babel}
+#+LATEX_HEADER: \usepackage[style = apa]{biblatex}
+#+LATEX_HEADER: \DeclareLanguageMapping{english}{english-apa}
+#+LATEX_HEADER: \newcommand\poscite[1]{\citeauthor{#1}'s (\citeyear{#1})}
+#+LATEX_HEADER: \addbibresource{~/thib/papiers/thib.bib}
+#+LATEX_HEADER: \usepackage[top=2cm,bottom=2.2cm,left=3cm,right=3cm]{geometry}
+:END:
+
+
+:Options_R:
+#+PROPERTY: header-args:R+  :tangle yes
+#+PROPERTY: header-args:R+ :session *R*
+:END:
+
+* Raw data
+
+Let's first have a look on the distribution of DMC parameters vs. age. 
+
+#+RESULTS: 
+[[file:parameters_vs_age.png]]
+
+And the distribution of the parameters.
+
+#+RESULTS: 
+[[file:parameters.png]]
+
+* Fits by parameter
+
+** Priors
+
+We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and gamma. 
+
+#+BEGIN_SRC R
+  prior <-  prior(normal(0, 1), nlpar = "b1", class = 'b') +
+  prior(normal(0, 1), nlpar = "b2", class = 'b', lb = 0) +
+  prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)
+#+END_SRC
+
+** drift
+
+#+BEGIN_SRC R
+  fit.v.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'v'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,
+  	     save_model = 'v_exp.stan',
+  	     file = 'v_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.v.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'v'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'v_puissance.stan',
+  	     file = 'v_puisssance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.v.linear <- brm(param ~  age,
+  	     data = data %>% filter(type == 'v'),
+  	     prior = c(set_prior("normal(0,1)",  class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'v_linear.stan', 
+  	     file = 'v_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_v_exp.png]]
+
+#+CAPTION: v: exponentional
+
+#+RESULTS: 
+[[file:plot_v_puissance.png]]
+
+#+CAPTION: v: puissance
+
+#+RESULTS: 
+[[file:plot_v_linear.png]]
+
+#+CAPTION: v: linear
+
+#+RESULTS: 
+[[file:pp_v.png]]
+
+
+
+
+#+RESULTS: 
+[[file:predict_v.png]]
+
+
+
+#+BEGIN_SRC R
+  loo.v.exp <-  loo(fit.v.exp, moment_match = TRUE)
+  loo.v.puissance <-  loo(fit.v.puissance, moment_match = TRUE)
+  loo.v.linear <-  loo(fit.v.linear, moment_match = TRUE)
+  loo.v <- loo_compare(loo.v.exp, loo.v.puissance, loo.v.linear)
+  loo.v
+#+END_SRC
+
+#+RESULTS: 
+:                 elpd_diff se_diff
+: fit.v.exp         0.0       0.0  
+: fit.v.puissance  -1.6       0.7  
+: fit.v.linear    -22.1       7.4
+
+** boundary
+
+#+BEGIN_SRC R
+  fit.a.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'a'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'a_exp.stan',
+  	     file = 'a_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.a.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'a'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .999,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'a_puissance.stan',
+  	     file = 'a_puissance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.a.linear <- brm(param ~  age,
+  	     data = data %>% filter(type == 'a'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'a_linear.stan', 
+  	     file = 'a_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_a_exp.png]]
+
+#+CAPTION: a: exponentional
+
+
+#+RESULTS: 
+[[file:plot_v.png]]
+
+#+CAPTION: a: exponentional
+
+#+RESULTS: 
+[[file:plot_a_puissance.png]]
+
+#+CAPTION: a: puissance
+
+#+RESULTS: 
+[[file:plot_a_linear.png]]
+
+#+CAPTION: a: linear
+
+#+BEGIN_SRC R
+  loo.a.exp <-  loo(fit.a.exp, moment_match = TRUE)
+  loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
+  loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
+  loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
+  loo.a
+#+END_SRC
+
+#+RESULTS: 
+:                 elpd_diff se_diff
+: fit.a.puissance   0.0       0.0  
+: fit.a.exp        -0.3       2.1  
+: fit.a.linear    -42.2      10.2
+
+#+RESULTS: 
+[[file:pp_a.png]]
+
+
+
+#+RESULTS: 
+[[file:predict_a.png]]
+
+** Residual Time
+
+#+BEGIN_SRC R
+  fit.ter.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'ter'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'ter_exp.stan',
+  	     file = 'ter_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.ter.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'ter'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'ter_puissance.stan',
+  	     file = 'ter_puissance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.ter.linear <- brm(param ~  age,
+  	     data = data %>% filter(type == 'ter'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'ter_linear.stan',
+  	     file = 'ter_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_ter_exp.png]]
+
+#+CAPTION: ter: exponentional
+
+#+RESULTS: 
+[[file:plot_ter_puissance.png]]
+
+#+CAPTION: ter: puissance
+
+#+RESULTS: 
+[[file:plot_ter_linear.png]]
+
+#+CAPTION: ter: linear
+
+#+BEGIN_SRC R
+  loo.ter.exp <-  loo(fit.ter.exp, moment_match = TRUE)
+  loo.ter.puissance <-  loo(fit.ter.puissance, moment_match = TRUE)
+  loo.ter.linear <-  loo(fit.ter.linear, moment_match = TRUE)
+  loo.ter <- loo_compare(loo.ter.exp, loo.ter.puissance, loo.ter.linear)
+  loo.ter
+#+END_SRC
+
+#+RESULTS: 
+:                   elpd_diff se_diff
+: fit.ter.exp         0.0       0.0  
+: fit.ter.puissance  -2.2       0.7  
+: fit.ter.linear    -19.4       7.8
+
+#+RESULTS: 
+[[file:pp_ter.png]]
+
+
+#+RESULTS: 
+[[file:predict_ter.png]]
+
+** tau
+
+#+BEGIN_SRC R
+   prior.tau <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+  
+  fit.tau.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'tau'),
+  	     prior = prior.tau,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'tau_exp.stan',
+  	     file = 'tau_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.tau.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'tau'),
+  	     prior = prior.tau,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'tau_puissance.stan',
+  	     file = 'tau_puissance',
+  	     save_pars = save_pars(all = TRUE),
+  	     )
+  fit.tau.linear <- brm(param ~  age,
+  	     data = data %>% filter(type == 'tau'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'tau_linear.stan',
+  	     file = 'tau_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_tau_exp.png]]
+
+#+CAPTION: tau: exponentional
+
+#+RESULTS: 
+[[file:plot_tau_puissance.png]]
+
+#+CAPTION: tau: puissance
+
+#+RESULTS: 
+[[file:plot_tau_linear.png]]
+
+#+CAPTION: tau: linear
+
+
+#+BEGIN_SRC R
+  loo.tau.exp <-  loo(fit.tau.exp, moment_match = TRUE, reloo = TRUE)
+  loo.tau.puissance <-  loo(fit.tau.puissance, moment_match = TRUE)
+  loo.tau.linear <-  loo(fit.tau.linear, moment_match = TRUE)
+  loo.tau <- loo_compare(loo.tau.exp, loo.tau.puissance, loo.tau.linear)
+  loo.tau
+#+END_SRC
+
+#+RESULTS: 
+: No problematic observations found. Returning the original 'loo' object.
+:                   elpd_diff se_diff
+: fit.tau.puissance  0.0       0.0   
+: fit.tau.exp       -0.2       0.4   
+: fit.tau.linear    -0.8       0.4
+
+#+RESULTS: 
+[[file:pp_tau.png]]
+
+
+#+RESULTS: 
+[[file:predict_tau.png]]
+
+** max amplitude
+
+#+BEGIN_SRC R
+   prior_maxamp <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+  
+  fit.max_ampl.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'max_ampl'),
+  	     prior = prior_maxamp,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'max_ampl_exp.stan',
+  	     file = 'max_ampl_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.max_ampl.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'max_ampl'),
+  	     prior = prior_maxamp,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'max_ampl_puissance.stan',
+  	     file = 'max_ampl_puissance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.max_ampl.linear <- brm(param ~  age,
+  	     data = data %>% filter(type == 'max_ampl'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'max_ampl_linear.stan',
+  	     save_pars = save_pars(all = TRUE),
+  	     file = 'max_ampl_linear'
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_max_ampl_exp.png]]
+
+#+CAPTION: max_ampl: exponentional
+
+#+RESULTS: 
+[[file:plot_max_ampl_puissance.png]]
+
+#+CAPTION: max_ampl: puissance
+
+#+RESULTS: 
+[[file:plot_max_ampl_linear.png]]
+
+#+CAPTION: max_ampl: linear
+
+#+BEGIN_SRC R
+  loo.max_ampl.exp <-  loo(fit.max_ampl.exp, moment_match = TRUE)
+  loo.max_ampl.puissance <-  loo(fit.max_ampl.puissance, moment_match = TRUE)
+  loo.max_ampl.linear <-  loo(fit.max_ampl.linear, moment_match = TRUE)
+  loo.max_ampl <- loo_compare(loo.max_ampl.exp, loo.max_ampl.puissance, loo.max_ampl.linear)
+  loo.max_ampl
+#+END_SRC
+
+#+RESULTS: 
+:                        elpd_diff se_diff
+: fit.max_ampl.exp        0.0       0.0   
+: fit.max_ampl.puissance -0.1       0.8   
+: fit.max_ampl.linear    -1.6       1.1
+
+#+RESULTS: 
+[[file:pp_max_ampl.png]]
+
+
+
+#+RESULTS: 
+[[file:predict_max_ampl.png]]
+
+** RT comp
+
+#+BEGIN_SRC R
+  fit.meanRT_comp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'meanRT_comp'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_comp_exp.stan',
+  	     file = 'meanRT_comp_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.meanRT_comp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'meanRT_comp'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_comp_puissance.stan',
+  	     file = 'meanRT_comp_puissance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.meanRT_comp.linear <- brm(param/1000 ~  age,
+  	     data = data %>% filter(type == 'meanRT_comp'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_comp_linear.stan',
+  	     file = 'meanRT_comp_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_meanRT_comp_exp.png]]
+
+#+CAPTION: meanRT_comp: exponentional
+
+#+RESULTS: 
+[[file:plot_meanRT_comp_puissance.png]]
+
+#+CAPTION: meanRT_comp: puissance
+
+#+RESULTS: 
+[[file:plot_meanRT_comp_linear.png]]
+
+#+CAPTION: meanRT_comp: linear
+
+#+BEGIN_SRC R
+  loo.meanRT_comp.exp <-  loo(fit.meanRT_comp.exp, moment_match = TRUE)
+  loo.meanRT_comp.puissance <-  loo(fit.meanRT_comp.puissance, moment_match = TRUE)
+  loo.meanRT_comp.linear <-  loo(fit.meanRT_comp.linear, moment_match = TRUE)
+  loo.meanRT_comp <- loo_compare(loo.meanRT_comp.exp, loo.meanRT_comp.puissance, loo.meanRT_comp.linear)
+  loo.meanRT_comp
+#+END_SRC
+
+#+RESULTS: 
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                           elpd_diff se_diff
+: fit.meanRT_comp.exp         0.0       0.0  
+: fit.meanRT_comp.puissance  -0.8       1.7  
+: fit.meanRT_comp.linear    -93.1      14.9
+
+
+#+RESULTS: 
+[[file:pp_meanRT_incomp.png]]
+
+
+#+RESULTS: 
+[[file:predict_meanRT_comp.png]]
+
+** RT incomp
+
+#+BEGIN_SRC R
+  fit.meanRT_incomp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'meanRT_incomp'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_incomp_exp.stan',
+  	     file = 'meanRT_incomp_exp',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.meanRT_incomp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
+  		b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
+  	     data = data %>% filter(type == 'meanRT_incomp'),
+  	     prior = prior,
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .99,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_incomp_puissance.stan',
+  	     file = 'meanRT_incomp_puissance',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+  fit.meanRT_incomp.linear <- brm(param/1000 ~  age,
+  	     data = data %>% filter(type == 'meanRT_incomp'),
+  	     prior = c(set_prior("normal(0,1)", class = "b")),
+  	     family = gaussian(link = 'identity'),
+  	     cores = 4, chains = 4,
+  	     control = list(adapt_delta = .95,  max_treedepth = 12),
+  	     iter = 8000,  warmup = 4000, seed = 123,  
+  	     save_model = 'meanRT_incomp_linear.stan',
+  	     file = 'meanRT_incomp_linear',
+  	     save_pars = save_pars(all = TRUE)
+  	     )
+#+END_SRC
+
+#+RESULTS: 
+[[file:plot_meanRT_incomp_exp.png]]
+
+#+CAPTION: meanRT_incomp: exponentional
+
+#+RESULTS: 
+[[file:plot_meanRT_incomp_puissance.png]]
+
+#+CAPTION: meanRT_incomp: puissance
+
+#+RESULTS: 
+[[file:plot_meanRT_incomp_linear.png]]
+
+#+CAPTION: meanRT_incomp: linear
+
+#+BEGIN_SRC R
+  loo.meanRT_incomp.exp <-  loo(fit.meanRT_incomp.exp, moment_match = TRUE)
+  loo.meanRT_incomp.puissance <-  loo(fit.meanRT_incomp.puissance, moment_match = TRUE)
+  loo.meanRT_incomp.linear <-  loo(fit.meanRT_incomp.linear, moment_match = TRUE)
+  loo.meanRT_incomp <- loo_compare(loo.meanRT_incomp.exp, loo.meanRT_incomp.puissance, loo.meanRT_incomp.linear)
+  loo.meanRT_incomp
+#+END_SRC
+
+#+RESULTS: 
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                             elpd_diff se_diff
+: fit.meanRT_incomp.puissance   0.0       0.0  
+: fit.meanRT_incomp.exp        -0.8       1.6  
+: fit.meanRT_incomp.linear    -94.1      15.0
+
+
+#+RESULTS: 
+[[file:pp_meanRT_incomp.png]]
+
+
+
+
+#+RESULTS: 
+[[file:predict_meanRT_incomp.png]]
+
+* Summary
+
+
+** Tau and max_ampl
+
+Essentially, tau and max_ampl do not depend on age. 
+
+** v, a, ter, RT_comp, RT_incomp
+
+For these parameters, the exponential model is either better than , or non-distinguishible  from, the power model (and better than the linear model). We provide estimates for the exponential model. 
+
+Note that the negative trend observed on the a for the linear model does not appears in the exponential model (which is better)
+
+#+RESULTS: 
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.14      0.02 0.09  0.18
+: 2             a     0.39      0.06 0.28  0.52
+: 3           ter     0.15      0.03  0.1   0.2
+: 4   meanRT_comp     0.31      0.03 0.26  0.37
+: 5 meanRT_incomp     0.32      0.03 0.27  0.39
