@@ -20,25 +20,20 @@ transformed data {
 parameters {
   vector[Kc] b;  // population-level effects
   real Intercept;  // temporary intercept for centered predictors
-  real<lower=0> shape;  // shape parameter
+  real<lower=0> sigma;  // residual SD
 }
 transformed parameters {
 }
 model {
   // likelihood including all constants
   if (!prior_only) {
-    // initialize linear predictor term
-    vector[N] mu = Intercept + Xc * b;
-    for (n in 1:N) {
-      // apply the inverse link function
-      mu[n] = shape / (mu[n]);
-    }
-    target += gamma_lpdf(Y | shape, mu);
+    target += normal_id_glm_lpdf(Y | Xc, Intercept, b, sigma);
   }
   // priors including all constants
   target += normal_lpdf(b | 0,1);
   target += student_t_lpdf(Intercept | 3, 0.1, 2.5);
-  target += gamma_lpdf(shape | 0.01, 0.01);
+  target += student_t_lpdf(sigma | 3, 0, 2.5)
+    - 1 * student_t_lccdf(0 | 3, 0, 2.5);
 }
 generated quantities {
   // actual population-level intercept

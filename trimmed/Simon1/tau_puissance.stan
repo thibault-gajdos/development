@@ -17,10 +17,10 @@ data {
 transformed data {
 }
 parameters {
-  vector<lower=0>[K_b1] b_b1;  // population-level effects
+  vector[K_b1] b_b1;  // population-level effects
   vector<lower=0>[K_b2] b_b2;  // population-level effects
   vector<lower=0>[K_b3] b_b3;  // population-level effects
-  real<lower=0> shape;  // shape parameter
+  real<lower=0> sigma;  // residual SD
 }
 transformed parameters {
 }
@@ -37,18 +37,18 @@ model {
     vector[N] mu;
     for (n in 1:N) {
       // compute non-linear predictor values
-      mu[n] = shape / (nlp_b1[n] * C_1[n] ^ ( - nlp_b2[n]) + nlp_b3[n]);
+      mu[n] = nlp_b1[n] * C_1[n] ^ ( - nlp_b2[n]) + nlp_b3[n];
     }
-    target += gamma_lpdf(Y | shape, mu);
+    target += normal_lpdf(Y | mu, sigma);
   }
   // priors including all constants
-  target += normal_lpdf(b_b1 | 0, 1)
-    - 1 * normal_lccdf(0 | 0, 1);
+  target += normal_lpdf(b_b1 | 0, 1);
   target += normal_lpdf(b_b2 | 0, 1)
     - 1 * normal_lccdf(0 | 0, 1);
   target += normal_lpdf(b_b3 | 0, 1)
     - 1 * normal_lccdf(0 | 0, 1);
-  target += gamma_lpdf(shape | 0.01, 0.01);
+  target += student_t_lpdf(sigma | 3, 0, 2.5)
+    - 1 * student_t_lccdf(0 | 3, 0, 2.5);
 }
 generated quantities {
 }

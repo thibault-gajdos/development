@@ -5,7 +5,8 @@
 #+PANDOC_OPTIONS: self-contained:t toc:t
 # clean output
 #+begin_src emacs-lisp :results none :exports none
-;; (org-babel-map-src-blocks nil (org-babel-remove-result))
+   ;;(org-babel-map-src-blocks nil (org-babel-remove-result))
+   ::(setq org-babel-min-lines-for-block-output 1000)
 #+end_src
 
 :options_LaTex:
@@ -32,7 +33,6 @@
 
 :Options_R:
 #+property: header-args:R+  :tangle yes
-#+property: header-args:R+ :eval never-export
 #+property: header-args:R+ :session *R*
 :end:
 
@@ -59,6 +59,7 @@
   d.param <- data %>%
     pivot_wider(names_from = type, values_from = param, id_cols = n)
 #+END_SRC
+
 
 * Raw data
 
@@ -99,44 +100,72 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)
 #+END_SRC
 
-
 ** drift
 
-#+BEGIN_SRC R  :results output silent  :exports code 
-  fit.v.exp <- brm(bf(param ~  -b1  * exp(-b2 * age) + b3,
+#+BEGIN_SRC R  :results output silent  :exports code
+  fit.v.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'v'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,
-	       save_pars = save_pars(all = TRUE),
-	       save_model = 'v_exp.stan',file = 'v_exp'
+	       save_model = 'v_exp.stan',
+	       file = 'v_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
-  fit.v.puissance <- brm(bf(param ~ -b1  * age ^(-b2)  + b3,
+  fit.v.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'v'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
-	       save_model = 'v_puissance.stan', file = 'v_puisssance',
+	       save_model = 'v_puissance.stan',
+	       file = 'v_puisssance',
 	       save_pars = save_pars(all = TRUE)
 	       )
   fit.v.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'v'),
 	       prior = c(set_prior("normal(0,1)",  class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .99,  max_treedepth = 12),
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'v_linear.stan', 
-	       save_pars = save_pars(all = TRUE),
-	       file = 'v_linear'
+	       file = 'v_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file plot_v_exp.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_exp.png]]
+
+#+CAPTION: v: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_v_puissance.png :exports results 
+   plot(fit.v.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_puissance.png]]
+
+#+CAPTION: v: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_v_linear.png :exports results 
+   plot(fit.v.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_linear.png]]
+
+#+CAPTION: v: linear
 
 #+BEGIN_SRC R :results output graphics :file pp_v.png :exports results 
   v.exp <- pp_check(fit.v.exp, nsamples = 100)
@@ -147,8 +176,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_v.png]]
-
 [[file:pp_v.png]]
 
 
@@ -184,70 +211,110 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 
 
-
-
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R  :results output  :exports both
   loo.v.exp <-  loo(fit.v.exp, moment_match = TRUE)
   loo.v.puissance <-  loo(fit.v.puissance, moment_match = TRUE)
   loo.v.linear <-  loo(fit.v.linear, moment_match = TRUE)
   loo.v <- loo_compare(loo.v.exp, loo.v.puissance, loo.v.linear)
+  loo.v
 #+END_SRC
 
 #+RESULTS:
+:                 elpd_diff se_diff
+: fit.v.exp         0.0       0.0  
+: fit.v.puissance  -1.3       0.8  
+: fit.v.linear    -19.9       5.8
 
 ** boundary
 
-#+BEGIN_SRC R  :results output silent  :exports code
+#+BEGIN_SRC R  :results output silent  :exports code 
   fit.a.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'a'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_exp'
+	       file = 'a_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'a'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_puissance'
+	       file = 'a_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'a'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_linear.stan', 
-	       save_pars = save_pars(all = TRUE),
-               file = 'a_linear'
+	       file = 'a_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R :results output graphics :file plot_a_exp.png :exports results 
+   plot(fit.a.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_exp.png]]
+
+#+CAPTION: a: exponentional
+
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v.png]]
+
+#+CAPTION: a: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_a_puissance.png :exports results 
+   plot(fit.a.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_puissance.png]]
+
+#+CAPTION: a: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_a_linear.png :exports results 
+   plot(fit.a.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_linear.png]]
+
+#+CAPTION: a: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.a.exp <-  loo(fit.a.exp, moment_match = TRUE)
   loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
   loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
   loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
-  #loo.a
-  #BF_informative <- bayes_factor(fit.a.exp,fit.a.puissance)
-  #BF_informative
+  loo.a
 #+END_SRC
 
 #+RESULTS:
-: Warning message:
-: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                 elpd_diff se_diff
+: fit.a.puissance   0.0       0.0  
+: fit.a.exp        -0.7       1.1  
+: fit.a.linear    -25.2       7.4
 
 #+BEGIN_SRC R :results output graphics :file pp_a.png :exports results 
   a.exp <- pp_check(fit.a.exp, nsamples = 100)
@@ -258,8 +325,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_a.png]]
-
 [[file:pp_a.png]]
 
 
@@ -299,48 +364,79 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'ter'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_exp'
+	       file = 'ter_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'ter'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_puissance'
+	       file = 'ter_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'ter'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_linear.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_linear'
+	       file = 'ter_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_ter_exp.png :exports results 
+   plot(fit.ter.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code
+#+RESULTS:
+[[file:plot_ter_exp.png]]
+
+#+CAPTION: ter: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_puissance.png :exports results 
+   plot(fit.ter.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_puissance.png]]
+
+#+CAPTION: ter: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_linear.png :exports results 
+   plot(fit.ter.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_linear.png]]
+
+#+CAPTION: ter: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.ter.exp <-  loo(fit.ter.exp, moment_match = TRUE)
   loo.ter.puissance <-  loo(fit.ter.puissance, moment_match = TRUE)
   loo.ter.linear <-  loo(fit.ter.linear, moment_match = TRUE)
   loo.ter <- loo_compare(loo.ter.exp, loo.ter.puissance, loo.ter.linear)
+  loo.ter
 #+END_SRC
 
 #+RESULTS:
+:                   elpd_diff se_diff
+: fit.ter.puissance   0.0       0.0  
+: fit.ter.exp        -0.7       0.9  
+: fit.ter.linear    -18.3       8.8
 
 #+BEGIN_SRC R :results output graphics :file pp_ter.png :exports results 
   ter.exp <- pp_check(fit.ter.exp, nsamples = 100)
@@ -351,8 +447,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_ter.png]]
-
 [[file:pp_ter.png]]
 
 
@@ -391,50 +485,81 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .99,  max_treedepth = 16),
-	       iter = 8000,  warmup = 5000, seed = 123,  
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_exp.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_exp'
+	       file = 'tau_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
-   pp_check(fit.tau.exp)
   fit.tau.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_puissance.stan',
+	       file = 'tau_puissance',
 	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_puissance'
 	       )
   fit.tau.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'tau'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_linear'
+	       file = 'tau_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_tau_exp.png :exports results 
+   plot(fit.tau.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports both 
+#+RESULTS:
+[[file:plot_tau_exp.png]]
+
+#+CAPTION: tau: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_puissance.png :exports results 
+   plot(fit.tau.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_puissance.png]]
+
+#+CAPTION: tau: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_linear.png :exports results 
+   plot(fit.tau.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_linear.png]]
+
+#+CAPTION: tau: linear
+
+ 
+#+BEGIN_SRC R  :results output  :exports both
   loo.tau.exp <-  loo(fit.tau.exp, moment_match = TRUE, reloo = TRUE)
   loo.tau.puissance <-  loo(fit.tau.puissance, moment_match = TRUE)
   loo.tau.linear <-  loo(fit.tau.linear, moment_match = TRUE)
   loo.tau <- loo_compare(loo.tau.exp, loo.tau.puissance, loo.tau.linear)
+  loo.tau
 #+END_SRC
 
 #+RESULTS:
 : No problematic observations found. Returning the original 'loo' object.
+:                   elpd_diff se_diff
+: fit.tau.puissance  0.0       0.0   
+: fit.tau.exp       -0.2       0.5   
+: fit.tau.linear    -1.1       1.0
 
 #+BEGIN_SRC R :results output graphics :file pp_tau.png :exports results 
   tau.exp <- pp_check(fit.tau.exp, nsamples = 100)
@@ -446,9 +571,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 #+RESULTS:
 [[file:pp_tau.png]]
-
-[[file:pp_tau.png]]
-
 
 
 #+BEGIN_SRC R :results output graphics :file predict_tau.png :exports results 
@@ -481,54 +603,88 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** max amplitude
 
-#+BEGIN_SRC R  :results output silent  :exports code
+#+BEGIN_SRC R  :results output silent  :exports code 
+   prior_maxamp <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+
   fit.max_ampl.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'max_ampl'),
-	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       prior = prior_maxamp,
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_exp'
+	       file = 'max_ampl_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.max_ampl.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'max_ampl'),
-	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       prior = prior_maxamp,
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_puissance'
+	       file = 'max_ampl_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.max_ampl.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'max_ampl'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_linear.stan',
 	       save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_linear'
+	       file = 'max_ampl_linear'
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_exp.png :exports results 
+   plot(fit.max_ampl.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports both
+#+RESULTS:
+[[file:plot_max_ampl_exp.png]]
+
+#+CAPTION: max_ampl: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_puissance.png :exports results 
+   plot(fit.max_ampl.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_max_ampl_puissance.png]]
+
+#+CAPTION: max_ampl: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_linear.png :exports results 
+   plot(fit.max_ampl.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_max_ampl_linear.png]]
+
+#+CAPTION: max_ampl: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.max_ampl.exp <-  loo(fit.max_ampl.exp, moment_match = TRUE)
   loo.max_ampl.puissance <-  loo(fit.max_ampl.puissance, moment_match = TRUE)
   loo.max_ampl.linear <-  loo(fit.max_ampl.linear, moment_match = TRUE)
   loo.max_ampl <- loo_compare(loo.max_ampl.exp, loo.max_ampl.puissance, loo.max_ampl.linear)
-
+  loo.max_ampl
 #+END_SRC
 
 #+RESULTS:
+:                        elpd_diff se_diff
+: fit.max_ampl.exp        0.0       0.0   
+: fit.max_ampl.puissance -0.2       0.6   
+: fit.max_ampl.linear    -0.6       0.6
 
 #+BEGIN_SRC R :results output graphics :file pp_max_ampl.png :exports results 
   max_ampl.exp <- pp_check(fit.max_ampl.exp, nsamples = 100)
@@ -539,8 +695,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_max_ampl.png]]
-
 [[file:pp_max_ampl.png]]
 
 
@@ -575,52 +729,88 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** RT comp
 
-#+BEGIN_SRC R  :results output silent  :exports code 
+#+BEGIN_SRC R  :results output silent  :exports code
   fit.meanRT_comp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_exp'
+	       file = 'meanRT_comp_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_comp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_puissance'
+	       file = 'meanRT_comp_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_comp.linear <- brm(param/1000 ~  age,
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_linear'
+	       file = 'meanRT_comp_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code 
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_exp.png :exports results 
+   plot(fit.meanRT_comp.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_exp.png]]
+
+#+CAPTION: meanRT_comp: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_puissance.png :exports results 
+   plot(fit.meanRT_comp.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_puissance.png]]
+
+#+CAPTION: meanRT_comp: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_linear.png :exports results 
+   plot(fit.meanRT_comp.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_linear.png]]
+
+#+CAPTION: meanRT_comp: linear
+
+#+BEGIN_SRC R  :results output  :exports both
   loo.meanRT_comp.exp <-  loo(fit.meanRT_comp.exp, moment_match = TRUE)
   loo.meanRT_comp.puissance <-  loo(fit.meanRT_comp.puissance, moment_match = TRUE)
   loo.meanRT_comp.linear <-  loo(fit.meanRT_comp.linear, moment_match = TRUE)
   loo.meanRT_comp <- loo_compare(loo.meanRT_comp.exp, loo.meanRT_comp.puissance, loo.meanRT_comp.linear)
+  loo.meanRT_comp
 #+END_SRC
 
 #+RESULTS:
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                           elpd_diff se_diff
+: fit.meanRT_comp.puissance   0.0       0.0  
+: fit.meanRT_comp.exp        -1.4       1.5  
+: fit.meanRT_comp.linear    -76.4      15.1
 
 
 #+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
@@ -633,10 +823,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 #+RESULTS:
 [[file:pp_meanRT_incomp.png]]
-
-[[file:pp_meanRT_incomp.png]]
-
-
 
 
 #+BEGIN_SRC R :results output graphics :file predict_meanRT_comp.png :exports results 
@@ -669,52 +855,86 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** RT incomp
 
-#+BEGIN_SRC R  :results output silent  :exports code
+#+BEGIN_SRC R  :results output silent  :exports code 
   fit.meanRT_incomp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_exp'
+	       file = 'meanRT_incomp_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_incomp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_puissance'
+	       file = 'meanRT_incomp_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_incomp.linear <- brm(param/1000 ~  age,
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_linear'
+	       file = 'meanRT_incomp_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_exp.png :exports results 
+   plot(fit.meanRT_incomp.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_exp.png]]
+
+#+CAPTION: meanRT_incomp: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_puissance.png :exports results 
+   plot(fit.meanRT_incomp.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_puissance.png]]
+
+#+CAPTION: meanRT_incomp: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_linear.png :exports results 
+   plot(fit.meanRT_incomp.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_linear.png]]
+
+#+CAPTION: meanRT_incomp: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.meanRT_incomp.exp <-  loo(fit.meanRT_incomp.exp, moment_match = TRUE)
   loo.meanRT_incomp.puissance <-  loo(fit.meanRT_incomp.puissance, moment_match = TRUE)
   loo.meanRT_incomp.linear <-  loo(fit.meanRT_incomp.linear, moment_match = TRUE)
   loo.meanRT_incomp <- loo_compare(loo.meanRT_incomp.exp, loo.meanRT_incomp.puissance, loo.meanRT_incomp.linear)
+  loo.meanRT_incomp
 #+END_SRC
 
 #+RESULTS:
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                             elpd_diff se_diff
+: fit.meanRT_incomp.puissance   0.0       0.0  
+: fit.meanRT_incomp.exp        -1.8       1.2  
+: fit.meanRT_incomp.linear    -63.1      14.2
 
 
 #+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
@@ -726,8 +946,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_meanRT_incomp.png]]
-
 [[file:pp_meanRT_incomp.png]]
 
 
@@ -763,14 +981,36 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 * Summary
 
-** Models
 
-There are two groups of parameters:
-- v, ter, RTcomp, RTincomp : power and exp models are equivalent, and dominate linear model
-- a, tau, max_ampl : all models are equivalent... 
+#+BEGIN_SRC R  :results output  :exports none 
+  summary(fit.v.exp)
+  summary(fit.v.puissance)
+  summary(fit.v.linear)
 
+  summary(fit.ter.exp)
+  summary(fit.ter.puissance)
+  summary(fit.ter.linear)
 
-#+BEGIN_SRC R  :results output  :exports both 
+  summary(fit.a.exp)
+  summary(fit.a.puissance)
+  summary(fit.a.linear)
+
+  summary(fit.tau.exp)
+  summary(fit.tau.puissance)
+  summary(fit.tau.linear)
+
+  summary(fit.max_ampl.exp)
+  summary(fit.max_ampl.puissance)
+  summary(fit.max_ampl.linear)
+
+  summary(fit.meanRT_comp.exp)
+  summary(fit.meanRT_comp.puissance)
+  summary(fit.meanRT_comp.linear)
+
+  summary(fit.meanRT_incomp.exp)
+  summary(fit.meanRT_incomp.puissance)
+  summary(fit.meanRT_incomp.linear)
+
   loo.v
   loo.a
   loo.ter
@@ -778,131 +1018,509 @@ There are two groups of parameters:
   loo.max_ampl
   loo.meanRT_comp
   loo.meanRT_incomp
+
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-                elpd_diff se_diff
-fit.v.exp         0.0       0.0  
-fit.v.puissance  -1.0       0.9  
-fit.v.linear    -10.9       4.4
-                elpd_diff se_diff
-fit.a.exp         0.0       0.0  
-fit.a.puissance  -0.2       1.4  
-fit.a.linear    -33.0       9.3
-                  elpd_diff se_diff
-fit.ter.puissance   0.0       0.0  
-fit.ter.exp        -0.3       1.0  
-fit.ter.linear    -24.9      10.1
-                  elpd_diff se_diff
-fit.tau.puissance  0.0       0.0   
-fit.tau.linear    -0.2       1.1   
-fit.tau.exp       -0.6       0.2
-                       elpd_diff se_diff
-fit.max_ampl.exp        0.0       0.0   
-fit.max_ampl.puissance -0.5       0.2   
-fit.max_ampl.linear    -0.6       0.7
-                          elpd_diff se_diff
-fit.meanRT_comp.puissance    0.0       0.0 
-fit.meanRT_comp.exp         -0.8       2.0 
-fit.meanRT_comp.linear    -113.8      17.3
-                            elpd_diff se_diff
-fit.meanRT_incomp.puissance    0.0       0.0 
-fit.meanRT_incomp.exp         -0.5       1.9 
-fit.meanRT_incomp.linear    -103.0      16.3
-#+end_example
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "v") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept    -0.89      0.11    -1.14    -0.71 1.00     5501     5589
+: b2_Intercept     0.16      0.03     0.10     0.21 1.00     4550     5672
+: b3_Intercept     0.49      0.03     0.44     0.57 1.00     5120     6175
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.11      0.00     0.10     0.12 1.00     6641     6915
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "v") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept    -1.81      0.24    -2.44    -1.49 1.00     4717     3667
+: b2_Intercept     0.58      0.18     0.26     0.95 1.00     2712     3281
+: b3_Intercept     0.80      0.19     0.57     1.30 1.00     2803     3045
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.11      0.00     0.10     0.12 1.00     5148     5856
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ age 
+:    Data: data %>% filter(type == "v") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.08      0.02     0.04     0.11 1.00    16239    11617
+: age           0.02      0.00     0.02     0.02 1.00    16587    12179
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.11      0.00     0.11     0.12 1.00    13170    11136
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "ter") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.60      0.08     0.48     0.80 1.00     4978     4778
+: b2_Intercept     0.16      0.03     0.10     0.22 1.00     4208     4775
+: b3_Intercept     0.34      0.02     0.28     0.38 1.00     4751     4834
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.07      0.00     0.06     0.07 1.00     6530     7131
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "ter") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     1.32      0.24     1.04     1.96 1.00     3967     3388
+: b2_Intercept     0.68      0.18     0.40     1.08 1.00     3197     3869
+: b3_Intercept     0.18      0.08     0.02     0.30 1.00     3250     3220
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.07      0.00     0.06     0.07 1.00     5439     5946
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ age 
+:    Data: data %>% filter(type == "ter") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.62      0.01     0.60     0.64 1.00    14977    11825
+: age          -0.01      0.00    -0.02    -0.01 1.00    15871    10631
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.07      0.00     0.07     0.08 1.00     9467     9626
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "a") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.35      0.13     0.18     0.69 1.00     3932     3950
+: b2_Intercept     0.30      0.06     0.19     0.44 1.00     3666     4145
+: b3_Intercept     0.05      0.00     0.04     0.06 1.00     4093     3975
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.02      0.00     0.02     0.03 1.00     5843     6465
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "a") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     1.00      0.43     0.42     2.03 1.00     3331     3883
+: b2_Intercept     1.46      0.28     0.90     1.99 1.00     3245     3214
+: b3_Intercept     0.04      0.01     0.02     0.05 1.00     3731     3083
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.02      0.00     0.02     0.03 1.00     5233     5473
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ age 
+:    Data: data %>% filter(type == "a") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.11      0.00     0.10     0.12 1.00    15727    12268
+: age          -0.00      0.00    -0.00    -0.00 1.00    18946    11720
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.03      0.00     0.02     0.03 1.00     6169     6468
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "tau") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     1.06      0.60     0.22     2.44 1.00     3734     3946
+: b2_Intercept     0.29      0.21     0.07     0.71 1.00     3147     2657
+: b3_Intercept     0.29      0.07     0.11     0.39 1.00     3566     2267
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.38      0.02     0.36     0.41 1.00     6477     7084
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "tau") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     1.27      0.54     0.36     2.50 1.00     5537     5075
+: b2_Intercept     0.80      0.30     0.31     1.48 1.00     4698     5350
+: b3_Intercept     0.18      0.09     0.01     0.35 1.00     5283     3412
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.38      0.02     0.36     0.41 1.00     8102     8102
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ age 
+:    Data: data %>% filter(type == "tau") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.55      0.06     0.44     0.67 1.00    15833    11364
+: age          -0.01      0.01    -0.02    -0.01 1.00    15766    11131
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.39      0.01     0.36     0.42 1.00    14342    10999
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "max_ampl") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.67      0.58     0.01     2.13 1.00     5041     3597
+: b2_Intercept     1.33      0.52     0.50     2.58 1.00     5481     3757
+: b3_Intercept     0.03      0.00     0.03     0.03 1.00     8728     7519
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.02      0.00     0.02     0.02 1.00     8705     9239
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "max_ampl") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.11      0.20     0.00     0.68 1.00     3093     4481
+: b2_Intercept     1.37      0.88     0.07     3.15 1.00     2128     2504
+: b3_Intercept     0.03      0.01     0.01     0.03 1.00     2601     1184
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.02      0.00     0.02     0.02 1.00     5620     5777
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param ~ age 
+:    Data: data %>% filter(type == "max_ampl") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.03      0.00     0.02     0.04 1.00    15260    10757
+: age          -0.00      0.00    -0.00     0.00 1.00    17729    11148
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.02      0.00     0.02     0.02 1.00     4706     5669
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "meanRT_comp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.01      0.00     0.00     0.01 1.00     4502     5582
+: b2_Intercept     0.34      0.04     0.27     0.41 1.00     4066     5446
+: b3_Intercept     0.00      0.00     0.00     0.00 1.00     4080     4921
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     6370     6938
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "meanRT_comp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.03      0.02     0.01     0.07 1.00     3326     3306
+: b2_Intercept     2.03      0.25     1.54     2.54 1.00     3283     3258
+: b3_Intercept     0.00      0.00     0.00     0.00 1.00     3532     3613
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     5385     5973
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ age 
+:    Data: data %>% filter(type == "meanRT_comp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.00      0.00     0.00     0.00 1.00    15548    11468
+: age          -0.00      0.00    -0.00    -0.00 1.00    17361    11144
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     1555     1477
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ b1 * exp(-b2 * age) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "meanRT_incomp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.01      0.00     0.00     0.01 1.00     4255     4254
+: b2_Intercept     0.34      0.04     0.26     0.44 1.00     4049     4329
+: b3_Intercept     0.00      0.00     0.00     0.00 1.00     4441     4933
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     6478     6957
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ b1 * age^(-b2) + b3 
+:          b1 ~ 1
+:          b2 ~ 1
+:          b3 ~ 1
+:    Data: data %>% filter(type == "meanRT_incomp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: b1_Intercept     0.04      0.02     0.02     0.10 1.00     3260     3376
+: b2_Intercept     2.06      0.29     1.52     2.64 1.00     3208     3388
+: b3_Intercept     0.00      0.00     0.00     0.00 1.00     3426     3757
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     5549     6325
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:  Family: gaussian 
+:   Links: mu = identity; sigma = identity 
+: Formula: param/1000 ~ age 
+:    Data: data %>% filter(type == "meanRT_incomp") (Number of observations: 335) 
+: Samples: 4 chains, each with iter = 8000; warmup = 4000; thin = 1;
+:          total post-warmup samples = 16000
+: 
+: Population-Level Effects: 
+:           Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: Intercept     0.00      0.00     0.00     0.00 1.00    16208    12487
+: age          -0.00      0.00    -0.00    -0.00 1.00    17951    11390
+: 
+: Family Specific Parameters: 
+:       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+: sigma     0.00      0.00     0.00     0.00 1.00     1396     1649
+: 
+: Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+: and Tail_ESS are effective sample size measures, and Rhat is the potential
+: scale reduction factor on split chains (at convergence, Rhat = 1).
+:                 elpd_diff se_diff
+: fit.v.exp         0.0       0.0  
+: fit.v.puissance  -1.3       0.8  
+: fit.v.linear    -19.9       5.8
+:                 elpd_diff se_diff
+: fit.a.puissance   0.0       0.0  
+: fit.a.exp        -0.7       1.1  
+: fit.a.linear    -25.2       7.4
+:                   elpd_diff se_diff
+: fit.ter.puissance   0.0       0.0  
+: fit.ter.exp        -0.7       0.9  
+: fit.ter.linear    -18.3       8.8
+:                   elpd_diff se_diff
+: fit.tau.puissance  0.0       0.0   
+: fit.tau.exp       -0.2       0.5   
+: fit.tau.linear    -1.1       1.0
+:                        elpd_diff se_diff
+: fit.max_ampl.exp        0.0       0.0   
+: fit.max_ampl.puissance -0.2       0.6   
+: fit.max_ampl.linear    -0.6       0.6
+:                           elpd_diff se_diff
+: fit.meanRT_comp.puissance   0.0       0.0  
+: fit.meanRT_comp.exp        -1.4       1.5  
+: fit.meanRT_comp.linear    -76.4      15.1
+:                             elpd_diff se_diff
+: fit.meanRT_incomp.puissance   0.0       0.0  
+: fit.meanRT_incomp.exp        -1.8       1.2  
+: fit.meanRT_incomp.linear    -63.1      14.2
 
-#+begin_example
-                elpd_diff se_diff
-fit.v.exp        0.0       0.0   
-fit.v.puissance -0.8       1.3   
-fit.v.linear    -5.8       3.5
-                elpd_diff se_diff
-fit.a.exp         0.0       0.0  
-fit.a.puissance  -0.9       2.2  
-fit.a.linear    -26.0       7.8
-                  elpd_diff se_diff
-fit.ter.exp         0.0       0.0  
-fit.ter.puissance  -0.4       0.7  
-fit.ter.linear    -15.9       7.8
-                  elpd_diff se_diff
-fit.tau.puissance  0.0       0.0   
-fit.tau.linear    -0.1       1.1   
-fit.tau.exp       -0.5       0.1
-                       elpd_diff se_diff
-fit.max_ampl.exp        0.0       0.0   
-fit.max_ampl.puissance -0.5       0.5   
-fit.max_ampl.linear    -0.8       0.3
-                          elpd_diff se_diff
-fit.meanRT_comp.exp          0.0       0.0 
-fit.meanRT_comp.puissance  -16.6       5.2 
-fit.meanRT_comp.linear    -114.4      16.0
-                            elpd_diff se_diff
-fit.meanRT_incomp.exp          0.0       0.0 
-fit.meanRT_incomp.puissance  -15.8       4.7 
-fit.meanRT_incomp.linear    -103.2      14.5
-#+end_example
+** Tau and max_ampl
 
+Essentially, tau and max_ampl do not depend on age. 
 
+** v, a, ter, RT_comp, RT_incomp
 
-** a, tau, max_ampl
+For these parameters, the exponential model is either better than , or non-distinguishible  from, the power model (and better than the linear model). We provide estimates for the exponential model. 
 
-Because all models are roughly equivalent, we analyse the simplest one (ie, linear). We observe that the models are really not good. 
-
-
-#+BEGIN_SRC R  :results output  :exports both
-  fixef(fit.a.linear)
-#+END_SRC
-
-#+RESULTS:
-:               Estimate    Est.Error         Q2.5        Q97.5
-: Intercept  0.096132694 0.0029031250  0.090434691  0.101841885
-: age       -0.002214907 0.0001937717 -0.002584841 -0.001821706
-
-:               Estimate    Est.Error         Q2.5        Q97.5
-: Intercept  0.096950199 0.0033803283  0.090291847  0.103529855
-: age       -0.002038067 0.0002352306 -0.002489122 -0.001568389
-
-
-#+BEGIN_SRC R  :results output  :exports both 
-  fixef(fit.tau.linear)
-#+END_SRC
-
-#+RESULTS:
-:              Estimate   Est.Error        Q2.5        Q97.5
-: Intercept  0.53817427 0.068085842  0.40636327  0.674087312
-: age       -0.01300192 0.004848364 -0.02166105 -0.002850607
-
-:              Estimate   Est.Error        Q2.5        Q97.5
-: Intercept  0.54249457 0.065139585  0.41522311  0.670293224
-: age       -0.01324409 0.004690014 -0.02171851 -0.003422917
-
-
-
-#+BEGIN_SRC R  :results output  :exports both 
-  fixef(fit.max_ampl.linear)
-#+END_SRC
-
-#+RESULTS:
-:                Estimate   Est.Error          Q2.5       Q97.5
-: Intercept  0.0313130362 0.003597038  0.0242330573 0.038365387
-: age       -0.0001508808 0.000292657 -0.0006951091 0.000454405
-
-:                Estimate    Est.Error          Q2.5        Q97.5
-: Intercept  3.179399e-02 0.0038603328  0.0242744623 0.0393712747
-: age       -1.870378e-05 0.0003222562 -0.0006244314 0.0006370595
-
-
-
-
-** V, ter, TR_comp, TR_incomp
 
 #+BEGIN_SRC R  :results output  :exports results 
   results <- data.frame(Parameter = character(), Estimate = numeric(), Est.Error = numeric(),  Q2.5 = numeric(), Q97.5 = numeric())
-  for (x in c('v','ter','meanRT_comp','meanRT_incomp'))
+  for (x in c('v','a', 'ter','meanRT_comp','meanRT_incomp'))
   {
   fit.x <- eval(as.name(paste('fit.', x,'.exp',sep = '')))  
-  row <-  c(Parameter = x, round(fixef(fit.x)[2,], digits = 2), R2 = round(bayes_R2(fit.x)[1], digits = 3))
+  row <-  c(Parameter = x, round(fixef(fit.x)[2,], digits = 2))
   row <- as.data.frame(t(row))
   results <- rbind(results, row)
   }
@@ -910,10 +1528,12 @@ Because all models are roughly equivalent, we analyse the simplest one (ie, line
 #+END_SRC
 
 #+RESULTS:
-:       Parameter Estimate Est.Error Q2.5 Q97.5    R2
-: 1             v     0.12      0.03 0.07  0.19 0.427
-: 2           ter     0.15      0.03  0.1  0.21 0.458
-: 3   meanRT_comp     0.29      0.03 0.25  0.34 0.631
-: 4 meanRT_incomp     0.29      0.03 0.24  0.35 0.574
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.16      0.03  0.1  0.21
+: 2             a      0.3      0.06 0.19  0.44
+: 3           ter     0.16      0.03  0.1  0.22
+: 4   meanRT_comp     0.34      0.04 0.27  0.41
+: 5 meanRT_incomp     0.34      0.04 0.26  0.44
+
 
 

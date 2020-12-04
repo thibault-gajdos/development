@@ -5,7 +5,8 @@
 #+PANDOC_OPTIONS: self-contained:t toc:t
 # clean output
 #+begin_src emacs-lisp :results none :exports none
-;; (org-babel-map-src-blocks nil (org-babel-remove-result))
+  ;; (org-babel-map-src-blocks nil (org-babel-remove-result))
+  ;;  (setq org-babel-min-lines-for-block-output 1000)
 #+end_src
 
 :options_LaTex:
@@ -32,8 +33,8 @@
 
 :Options_R:
 #+property: header-args:R+  :tangle yes
-#+property: header-args:R+ :eval never-export
 #+property: header-args:R+ :session *R*
+#+property: header-args :eval never-export
 :end:
 
 
@@ -58,6 +59,7 @@
   d.param <- data %>%
     pivot_wider(names_from = type, values_from = param, id_cols = n)
 #+END_SRC
+
 
 * Raw data
 
@@ -90,7 +92,6 @@ And the distribution of the parameters.
 
 ** Priors
 
-
 We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and gamma. 
 
 #+BEGIN_SRC R  :results output silent :exports code 
@@ -99,44 +100,72 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
   prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)
 #+END_SRC
 
-
 ** drift
 
 #+BEGIN_SRC R  :results output silent  :exports code
-  fit.v.exp <- brm(bf(param ~  -b1  * exp(-b2 * age) + b3,
+  fit.v.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'v'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,
-	       save_pars = save_pars(all = TRUE),
-	       save_model = 'v_exp.stan',file = 'v_exp'
+	       save_model = 'v_exp.stan',
+	       file = 'v_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
-  fit.v.puissance <- brm(bf(param ~ -b1  * age ^(-b2)  + b3,
+  fit.v.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'v'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
-	       save_model = 'v_puissance.stan', file = 'v_puisssance',
+	       save_model = 'v_puissance.stan',
+	       file = 'v_puisssance',
 	       save_pars = save_pars(all = TRUE)
 	       )
   fit.v.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'v'),
 	       prior = c(set_prior("normal(0,1)",  class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .99,  max_treedepth = 12),
+	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'v_linear.stan', 
-	       save_pars = save_pars(all = TRUE),
-	       file = 'v_linear'
+	       file = 'v_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
+
+#+BEGIN_SRC R :results output graphics :file plot_v_exp.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_exp.png]]
+
+#+CAPTION: v: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_v_puissance.png :exports results 
+   plot(fit.v.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_puissance.png]]
+
+#+CAPTION: v: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_v_linear.png :exports results 
+   plot(fit.v.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v_linear.png]]
+
+#+CAPTION: v: linear
 
 #+BEGIN_SRC R :results output graphics :file pp_v.png :exports results 
   v.exp <- pp_check(fit.v.exp, nsamples = 100)
@@ -147,8 +176,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_v.png]]
-
 [[file:pp_v.png]]
 
 
@@ -184,16 +211,19 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 
 
-
-
-#+BEGIN_SRC R  :results output  :exports code 
+#+BEGIN_SRC R  :results output  :exports both
   loo.v.exp <-  loo(fit.v.exp, moment_match = TRUE)
   loo.v.puissance <-  loo(fit.v.puissance, moment_match = TRUE)
   loo.v.linear <-  loo(fit.v.linear, moment_match = TRUE)
   loo.v <- loo_compare(loo.v.exp, loo.v.puissance, loo.v.linear)
+  loo.v
 #+END_SRC
 
 #+RESULTS:
+:                 elpd_diff se_diff
+: fit.v.exp         0.0       0.0  
+: fit.v.puissance  -1.1       0.6  
+: fit.v.linear    -11.6       4.3
 
 ** boundary
 
@@ -202,52 +232,89 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'a'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_exp'
+	       file = 'a_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'a'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'a_puissance'
+	       file = 'a_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.a.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'a'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'a_linear.stan', 
-	       save_pars = save_pars(all = TRUE),
-               file = 'a_linear'
+	       file = 'a_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R :results output graphics :file plot_a_exp.png :exports results 
+   plot(fit.a.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_exp.png]]
+
+#+CAPTION: a: exponentional
+
+
+#+BEGIN_SRC R :results output graphics :file plot_v.png :exports results 
+   plot(fit.v.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_v.png]]
+
+#+CAPTION: a: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_a_puissance.png :exports results 
+   plot(fit.a.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_puissance.png]]
+
+#+CAPTION: a: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_a_linear.png :exports results 
+   plot(fit.a.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_a_linear.png]]
+
+#+CAPTION: a: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.a.exp <-  loo(fit.a.exp, moment_match = TRUE)
   loo.a.puissance <-  loo(fit.a.puissance, moment_match = TRUE)
   loo.a.linear <-  loo(fit.a.linear, moment_match = TRUE)
   loo.a <- loo_compare(loo.a.exp, loo.a.puissance, loo.a.linear)
-  #loo.a
-  #BF_informative <- bayes_factor(fit.a.exp,fit.a.puissance)
-  #BF_informative
+  loo.a
 #+END_SRC
 
 #+RESULTS:
-: Warning message:
-: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                 elpd_diff se_diff
+: fit.a.puissance   0.0       0.0  
+: fit.a.exp        -1.2       1.3  
+: fit.a.linear    -20.8       6.8
 
 #+BEGIN_SRC R :results output graphics :file pp_a.png :exports results 
   a.exp <- pp_check(fit.a.exp, nsamples = 100)
@@ -258,8 +325,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_a.png]]
-
 [[file:pp_a.png]]
 
 
@@ -299,48 +364,79 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'ter'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_exp'
+	       file = 'ter_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'ter'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_puissance'
+	       file = 'ter_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.ter.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'ter'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'ter_linear.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'ter_linear'
+	       file = 'ter_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_ter_exp.png :exports results 
+   plot(fit.ter.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code 
+#+RESULTS:
+[[file:plot_ter_exp.png]]
+
+#+CAPTION: ter: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_puissance.png :exports results 
+   plot(fit.ter.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_puissance.png]]
+
+#+CAPTION: ter: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_ter_linear.png :exports results 
+   plot(fit.ter.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_ter_linear.png]]
+
+#+CAPTION: ter: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.ter.exp <-  loo(fit.ter.exp, moment_match = TRUE)
   loo.ter.puissance <-  loo(fit.ter.puissance, moment_match = TRUE)
   loo.ter.linear <-  loo(fit.ter.linear, moment_match = TRUE)
   loo.ter <- loo_compare(loo.ter.exp, loo.ter.puissance, loo.ter.linear)
+  loo.ter
 #+END_SRC
 
 #+RESULTS:
+:                   elpd_diff se_diff
+: fit.ter.exp         0.0       0.0  
+: fit.ter.puissance  -1.7       1.1  
+: fit.ter.linear    -40.5      10.8
 
 #+BEGIN_SRC R :results output graphics :file pp_ter.png :exports results 
   ter.exp <- pp_check(fit.ter.exp, nsamples = 100)
@@ -351,8 +447,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_ter.png]]
-
 [[file:pp_ter.png]]
 
 
@@ -386,57 +480,86 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** tau
 
-#+BEGIN_SRC R  :results output silent  :exports code
+#+BEGIN_SRC R  :results output silent  :exports code 
   fit.tau.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .99,  max_treedepth = 16),
-	       iter = 8000,  warmup = 5000, seed = 123,  
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
+	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_exp.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_exp'
+	       file = 'tau_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
-   pp_check(fit.tau.exp)
   fit.tau.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'tau'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .999,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_puissance.stan',
+	       file = 'tau_puissance',
 	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_puissance'
 	       )
   fit.tau.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'tau'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'tau_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-	       file = 'tau_linear'
+	       file = 'tau_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_tau_exp.png :exports results 
+   plot(fit.tau.exp)
+#+END_SRC
 
+#+RESULTS:
+[[file:plot_tau_exp.png]]
+
+#+CAPTION: tau: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_puissance.png :exports results 
+   plot(fit.tau.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_puissance.png]]
+
+#+CAPTION: tau: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_tau_linear.png :exports results 
+   plot(fit.tau.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_tau_linear.png]]
+
+#+CAPTION: tau: linear
+
+ 
 #+BEGIN_SRC R  :results output  :exports both
   loo.tau.exp <-  loo(fit.tau.exp, moment_match = TRUE, reloo = TRUE)
   loo.tau.puissance <-  loo(fit.tau.puissance, moment_match = TRUE)
   loo.tau.linear <-  loo(fit.tau.linear, moment_match = TRUE)
   loo.tau <- loo_compare(loo.tau.exp, loo.tau.puissance, loo.tau.linear)
+  loo.tau
 #+END_SRC
 
 #+RESULTS:
 : No problematic observations found. Returning the original 'loo' object.
-: Warning message:
-: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                   elpd_diff se_diff
+: fit.tau.puissance  0.0       0.0   
+: fit.tau.exp       -0.2       0.5   
+: fit.tau.linear    -2.5       1.0
 
 #+BEGIN_SRC R :results output graphics :file pp_tau.png :exports results 
   tau.exp <- pp_check(fit.tau.exp, nsamples = 100)
@@ -448,9 +571,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 #+RESULTS:
 [[file:pp_tau.png]]
-
-[[file:pp_tau.png]]
-
 
 
 #+BEGIN_SRC R :results output graphics :file predict_tau.png :exports results 
@@ -484,53 +604,89 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 ** max amplitude
 
 #+BEGIN_SRC R  :results output silent  :exports code 
+   prior_maxamp <-  prior(normal(0, 1), nlpar = "b1", class = 'b', lb = 0) +
+    prior(normal(0, 1), nlpar = "b2", class = 'b', lb =0) +
+    prior(normal(0, 1), nlpar = "b3", class = 'b', lb = 0)        
+
   fit.max_ampl.exp <- brm(bf(param ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'max_ampl'),
-	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       prior = prior_maxamp,
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_exp'
+	       file = 'max_ampl_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.max_ampl.puissance <- brm(bf(param ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'max_ampl'),
-	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       prior = prior_maxamp,
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_puissance'
+	       file = 'max_ampl_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.max_ampl.linear <- brm(param ~  age,
 	       data = data %>% filter(type == 'max_ampl'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'max_ampl_linear.stan',
 	       save_pars = save_pars(all = TRUE),
-               file = 'max_ampl_linear'
+	       file = 'max_ampl_linear'
 	       )
 #+END_SRC
 
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_exp.png :exports results 
+   plot(fit.max_ampl.exp)
+#+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports both
+#+RESULTS:
+[[file:plot_max_ampl_exp.png]]
+
+#+CAPTION: max_ampl: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_puissance.png :exports results 
+   plot(fit.max_ampl.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_max_ampl_puissance.png]]
+
+#+CAPTION: max_ampl: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_max_ampl_linear.png :exports results 
+   plot(fit.max_ampl.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_max_ampl_linear.png]]
+
+#+CAPTION: max_ampl: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.max_ampl.exp <-  loo(fit.max_ampl.exp, moment_match = TRUE)
   loo.max_ampl.puissance <-  loo(fit.max_ampl.puissance, moment_match = TRUE)
   loo.max_ampl.linear <-  loo(fit.max_ampl.linear, moment_match = TRUE)
   loo.max_ampl <- loo_compare(loo.max_ampl.exp, loo.max_ampl.puissance, loo.max_ampl.linear)
-
+  loo.max_ampl
 #+END_SRC
 
 #+RESULTS:
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                        elpd_diff se_diff
+: fit.max_ampl.puissance  0.0       0.0   
+: fit.max_ampl.exp       -0.2       0.9   
+: fit.max_ampl.linear    -1.0       1.0
 
 #+BEGIN_SRC R :results output graphics :file pp_max_ampl.png :exports results 
   max_ampl.exp <- pp_check(fit.max_ampl.exp, nsamples = 100)
@@ -541,8 +697,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_max_ampl.png]]
-
 [[file:pp_max_ampl.png]]
 
 
@@ -577,58 +731,87 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 ** RT comp
 
-#+BEGIN_SRC R  :results output silent  :exports code 
+#+BEGIN_SRC R  :results output silent  :exports code
   fit.meanRT_comp.exp <- brm(bf(param/1000 ~  b1  * exp(-b2 * age) + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_exp'
+	       file = 'meanRT_comp_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_comp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_puissance'
+	       file = 'meanRT_comp_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_comp.linear <- brm(param/1000 ~  age,
 	       data = data %>% filter(type == 'meanRT_comp'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_comp_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-               file = 'meanRT_comp_linear'
+	       file = 'meanRT_comp_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code 
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_exp.png :exports results 
+   plot(fit.meanRT_comp.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_exp.png]]
+
+#+CAPTION: meanRT_comp: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_puissance.png :exports results 
+   plot(fit.meanRT_comp.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_puissance.png]]
+
+#+CAPTION: meanRT_comp: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_comp_linear.png :exports results 
+   plot(fit.meanRT_comp.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_comp_linear.png]]
+
+#+CAPTION: meanRT_comp: linear
+
+#+BEGIN_SRC R  :results output  :exports both
   loo.meanRT_comp.exp <-  loo(fit.meanRT_comp.exp, moment_match = TRUE)
-  loo.meanRT_comp.puissance <-  loo(fit.meanRT_comp.puissance, moment_match = TRUE)
+  loo.meanRT_comp.puissance <-  loo(fit.meanRT_comp.puissance, reloo = TRUE)
   loo.meanRT_comp.linear <-  loo(fit.meanRT_comp.linear, moment_match = TRUE)
   loo.meanRT_comp <- loo_compare(loo.meanRT_comp.exp, loo.meanRT_comp.puissance, loo.meanRT_comp.linear)
+  loo.meanRT_comp
 #+END_SRC
 
 #+RESULTS:
 : Warning message:
 : Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
-: Warning message:
-: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
-: Warning message:
-: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Error in validate_ll(log_ratios) : All input values must be finite.
+: Error: Moment matching failed. Perhaps you did not set 'save_all_pars' to TRUE when fitting your model?
+: Error in loo_compare.default(loo.meanRT_comp.exp, loo.meanRT_comp.puissance,  : 
+:   object 'loo.meanRT_comp.puissance' not found
+: Error: object 'loo.meanRT_comp' not found
 
 
 #+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
@@ -641,10 +824,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 #+RESULTS:
 [[file:pp_meanRT_incomp.png]]
-
-[[file:pp_meanRT_incomp.png]]
-
-
 
 
 #+BEGIN_SRC R :results output graphics :file predict_meanRT_comp.png :exports results 
@@ -682,47 +861,85 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_exp.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_exp'
+	       file = 'meanRT_incomp_exp',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_incomp.puissance <- brm(bf(param/1000 ~ b1  * age ^(-b2)  + b3,
 		  b1 ~ 1, b2 ~ 1, b3 ~ 1, nl = TRUE),
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = prior,
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
-	       control = list(adapt_delta = .95,  max_treedepth = 12),
+	       control = list(adapt_delta = .99,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_puissance.stan',
-               save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_puissance'
+	       file = 'meanRT_incomp_puissance',
+	       save_pars = save_pars(all = TRUE)
 	       )
   fit.meanRT_incomp.linear <- brm(param/1000 ~  age,
 	       data = data %>% filter(type == 'meanRT_incomp'),
 	       prior = c(set_prior("normal(0,1)", class = "b")),
-	       family = Gamma(link = 'identity'),
+	       family = gaussian(link = 'identity'),
 	       cores = 4, chains = 4,
 	       control = list(adapt_delta = .95,  max_treedepth = 12),
 	       iter = 8000,  warmup = 4000, seed = 123,  
 	       save_model = 'meanRT_incomp_linear.stan',
-	       save_pars = save_pars(all = TRUE),
-               file = 'meanRT_incomp_linear'
+	       file = 'meanRT_incomp_linear',
+	       save_pars = save_pars(all = TRUE)
 	       )
 #+END_SRC
 
-#+BEGIN_SRC R  :results output  :exports code
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_exp.png :exports results 
+   plot(fit.meanRT_incomp.exp)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_exp.png]]
+
+#+CAPTION: meanRT_incomp: exponentional
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_puissance.png :exports results 
+   plot(fit.meanRT_incomp.puissance)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_puissance.png]]
+
+#+CAPTION: meanRT_incomp: puissance
+
+#+BEGIN_SRC R :results output graphics :file plot_meanRT_incomp_linear.png :exports results 
+   plot(fit.meanRT_incomp.linear)
+#+END_SRC
+
+#+RESULTS:
+[[file:plot_meanRT_incomp_linear.png]]
+
+#+CAPTION: meanRT_incomp: linear
+
+#+BEGIN_SRC R  :results output  :exports both 
   loo.meanRT_incomp.exp <-  loo(fit.meanRT_incomp.exp, moment_match = TRUE)
   loo.meanRT_incomp.puissance <-  loo(fit.meanRT_incomp.puissance, moment_match = TRUE)
   loo.meanRT_incomp.linear <-  loo(fit.meanRT_incomp.linear, moment_match = TRUE)
   loo.meanRT_incomp <- loo_compare(loo.meanRT_incomp.exp, loo.meanRT_incomp.puissance, loo.meanRT_incomp.linear)
+  loo.meanRT_incomp
 #+END_SRC
 
 #+RESULTS:
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+: Warning message:
+: Some Pareto k diagnostic values are slightly high. See help('pareto-k-diagnostic') for details.
+:                             elpd_diff se_diff
+: fit.meanRT_incomp.puissance   0.0       0.0  
+: fit.meanRT_incomp.exp        -0.9       1.8  
+: fit.meanRT_incomp.linear    -82.2      12.7
 
 
 #+BEGIN_SRC R :results output graphics :file pp_meanRT_incomp.png :exports results 
@@ -734,8 +951,6 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 #+END_SRC
 
 #+RESULTS:
-[[file:pp_meanRT_incomp.png]]
-
 [[file:pp_meanRT_incomp.png]]
 
 
@@ -771,14 +986,39 @@ We use normal(0,1) priors for alpha and  half normal(0,1)  prior for beta and ga
 
 * Summary
 
-** Models
+** Tau and max_ampl
 
-There are two groups of parameters:
-- v, ter, RTcomp, RTincomp : power and exp models are equivalent, and dominate linear model
-- a, tau, max_ampl : all models are equivalent... 
+Essentially, tau and max_ampl do not depend on age. 
 
+#+BEGIN_SRC R  :results output  :exports none 
+  summary(fit.v.exp)
+  summary(fit.v.puissance)
+  summary(fit.v.linear)
 
-#+BEGIN_SRC R  :results output  :exports both 
+  summary(fit.ter.exp)
+  summary(fit.ter.puissance)
+  summary(fit.ter.linear)
+
+  summary(fit.a.exp)
+  summary(fit.a.puissance)
+  summary(fit.a.linear)
+
+  summary(fit.tau.exp)
+  summary(fit.tau.puissance)
+  summary(fit.tau.linear)
+
+  summary(fit.max_ampl.exp)
+  summary(fit.max_ampl.puissance)
+  summary(fit.max_ampl.linear)
+
+  summary(fit.meanRT_comp.exp)
+  summary(fit.meanRT_comp.puissance)
+  summary(fit.meanRT_comp.linear)
+
+  summary(fit.meanRT_incomp.exp)
+  summary(fit.meanRT_incomp.puissance)
+  summary(fit.meanRT_incomp.linear)
+
   loo.v
   loo.a
   loo.ter
@@ -786,131 +1026,20 @@ There are two groups of parameters:
   loo.max_ampl
   loo.meanRT_comp
   loo.meanRT_incomp
+
 #+END_SRC
 
-#+RESULTS:
-#+begin_example
-                elpd_diff se_diff
-fit.v.exp        0.0       0.0   
-fit.v.puissance -2.0       1.3   
-fit.v.linear    -5.7       3.2
-                elpd_diff se_diff
-fit.a.puissance   0.0       0.0  
-fit.a.exp        -1.3       1.5  
-fit.a.linear    -23.7       7.8
-                  elpd_diff se_diff
-fit.ter.exp         0.0       0.0  
-fit.ter.puissance  -3.3       1.6  
-fit.ter.linear    -57.0      12.1
-                  elpd_diff se_diff
-fit.tau.exp        0.0       0.0   
-fit.tau.puissance -1.7       1.4   
-fit.tau.linear    -5.5       3.3
-                       elpd_diff se_diff
-fit.max_ampl.puissance  0.0       0.0   
-fit.max_ampl.exp        0.0       1.1   
-fit.max_ampl.linear    -0.7       1.1
-                          elpd_diff se_diff
-fit.meanRT_comp.exp          0.0       0.0 
-fit.meanRT_comp.puissance   -2.0       2.4 
-fit.meanRT_comp.linear    -108.5      14.8
-                            elpd_diff se_diff
-fit.meanRT_incomp.exp          0.0       0.0 
-fit.meanRT_incomp.puissance   -1.8       2.2 
-fit.meanRT_incomp.linear    -122.5      15.8
-#+end_example
+** v, a, ter, RT_comp, RT_incomp
 
-#+begin_example
-                elpd_diff se_diff
-fit.v.exp        0.0       0.0   
-fit.v.puissance -1.8       1.1   
-fit.v.linear    -6.3       3.8
-                elpd_diff se_diff
-fit.a.puissance  0.0       0.0   
-fit.a.exp       -1.0       0.3   
-fit.a.linear    -6.7       5.0
-                  elpd_diff se_diff
-fit.ter.exp         0.0       0.0  
-fit.ter.puissance  -1.5       1.2  
-fit.ter.linear    -31.7       9.8
-                  elpd_diff se_diff
-fit.tau.exp        0.0       0.0   
-fit.tau.puissance -2.7       1.7   
-fit.tau.linear    -8.3       4.1
-                       elpd_diff se_diff
-fit.max_ampl.puissance  0.0       0.0   
-fit.max_ampl.exp        0.0       0.9   
-fit.max_ampl.linear    -0.5       1.1
-                          elpd_diff se_diff
-fit.meanRT_comp.exp          0.0       0.0 
-fit.meanRT_comp.puissance  -14.1       4.6 
-fit.meanRT_comp.linear    -118.8      14.4
-                            elpd_diff se_diff
-fit.meanRT_incomp.exp          0.0       0.0 
-fit.meanRT_incomp.puissance  -14.9       4.9 
-fit.meanRT_incomp.linear    -133.1      15.2
-#+end_example
+For these parameters, the exponential model is either better than , or non-distinguishible  from, the power model (and better than the linear model). We provide estimates for the exponential model. 
 
-
-
-** a, tau, max_ampl
-
-Because all models are roughly equivalent, we analyse the simplest one (ie, linear). We observe that the models are really not good. 
-
-
-#+BEGIN_SRC R  :results output  :exports both 
-  fixef(fit.a.linear)
-#+END_SRC
-
-#+RESULTS:
-:              Estimate    Est.Error         Q2.5        Q97.5
-: Intercept  0.08530148 0.0023634116  0.080704169  0.089936971
-: age       -0.00178331 0.0001639715 -0.002094899 -0.001453944
-
-:               Estimate   Est.Error         Q2.5        Q97.5
-: Intercept  0.096859980 0.003488899  0.090069139  0.103713390
-: age       -0.002126519 0.000244398 -0.002592658 -0.001633014
-
-
-#+BEGIN_SRC R  :results output  :exports both 
-  fixef(fit.tau.linear)
-#+END_SRC
-
-#+RESULTS:
-:               Estimate  Est.Error         Q2.5        Q97.5
-: Intercept  0.167365732 0.02032134  0.129588609 0.2094740229
-: age       -0.002667254 0.00142847 -0.005331352 0.0002677079
-
-:               Estimate   Est.Error         Q2.5         Q97.5
-: Intercept  0.178643050 0.018826414  0.142308183  0.2174841948
-: age       -0.003387767 0.001279616 -0.005730504 -0.0007399621
-
-
-
-#+BEGIN_SRC R  :results output  :exports both 
-  fixef(fit.max_ampl.linear)
-#+END_SRC
-
-#+RESULTS:
-:                Estimate   Est.Error          Q2.5        Q97.5
-: Intercept  0.0369801685 0.003608200  0.0300222963 0.0440200765
-: age       -0.0003912894 0.000281454 -0.0009141162 0.0001805971
-
-:                Estimate    Est.Error         Q2.5       Q97.5
-: Intercept  0.0399747270 0.0036430239  0.032877110 0.047048691
-: age       -0.0004860793 0.0002867091 -0.001014249 0.000104426
-
-
-
-
-** V, ter, TR_comp, TR_incomp
 
 #+BEGIN_SRC R  :results output  :exports results 
   results <- data.frame(Parameter = character(), Estimate = numeric(), Est.Error = numeric(),  Q2.5 = numeric(), Q97.5 = numeric())
-  for (x in c('v','ter','meanRT_comp','meanRT_incomp'))
+  for (x in c('v','a', 'ter','meanRT_comp','meanRT_incomp'))
   {
   fit.x <- eval(as.name(paste('fit.', x,'.exp',sep = '')))  
-  row <-  c(Parameter = x, round(fixef(fit.x)[2,], digits = 2), R2 = round(bayes_R2(fit.x)[1], digits = 3))
+  row <-  c(Parameter = x, round(fixef(fit.x)[2,], digits = 2))
   row <- as.data.frame(t(row))
   results <- rbind(results, row)
   }
@@ -918,10 +1047,13 @@ Because all models are roughly equivalent, we analyse the simplest one (ie, line
 #+END_SRC
 
 #+RESULTS:
-:       Parameter Estimate Est.Error Q2.5 Q97.5    R2
-: 1             v     0.09      0.03 0.04  0.15 0.406
-: 2           ter     0.21      0.02 0.16  0.25 0.583
-: 3   meanRT_comp     0.27      0.02 0.23  0.31 0.623
-: 4 meanRT_incomp     0.27      0.02 0.23  0.31 0.699
+:       Parameter Estimate Est.Error Q2.5 Q97.5
+: 1             v     0.12      0.03 0.07  0.18
+: 2             a     0.35      0.08 0.21  0.52
+: 3           ter      0.2      0.03 0.15  0.25
+: 4   meanRT_comp     0.29      0.03 0.22  0.36
+: 5 meanRT_incomp     0.29      0.03 0.23  0.35
+
+
 
 
